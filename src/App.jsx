@@ -1,0 +1,370 @@
+import { useState, useRef, useCallback, useEffect } from "react"
+import Canvas from "./components/Canvas"
+import ChatSidebar from "./components/ChatSidebar"
+import { streamChat } from "./lib/openrouter"
+import { executeToolCall } from "./lib/canvas-executor"
+import { DEFAULT_MODEL, DEFAULT_EFFORT } from "./lib/models"
+import { getBounds } from "./lib/element-store"
+
+const MAX_TOOL_ROUNDS = 50
+
+function describeElement(el) {
+  switch (el.type) {
+    case "rectangle":
+      return `rectangle(id:${el.id}, x:${el.x}, y:${el.y}, ${el.width}x${el.height}, fill:${el.fill || "none"}, stroke:${el.stroke || "none"})`
+    case "circle":
+      return `circle(id:${el.id}, x:${el.x}, y:${el.y}, r:${el.radius}, fill:${el.fill || "none"}, stroke:${el.stroke || "none"})`
+    case "text":
+      return `text(id:${el.id}, x:${el.x}, y:${el.y}, "${el.text}", size:${el.fontSize}, color:${el.color})`
+    case "line":
+      return `line(id:${el.id}, ${el.x1},${el.y1} → ${el.x2},${el.y2}, color:${el.color})`
+    case "path":
+      return `path(id:${el.id}, ${el.points?.length || 0} points, color:${el.color})`
+    default:
+      return `${el.type}(id:${el.id})`
+  }
+}
+
+function getStrokeBounds(strokes) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const stroke of strokes) {
+    for (const p of stroke) {
+      minX = Math.min(minX, p.x)
+      minY = Math.min(minY, p.y)
+      maxX = Math.max(maxX, p.x)
+      maxY = Math.max(maxY, p.y)
+    }
+  }
+  return { x: minX, y: minY, x2: maxX, y2: maxY, w: maxX - minX, h: maxY - minY }
+}
+
+function findElementsInRegion(elements, bounds, padding = 20) {
+  const hits = []
+  for (const el of elements) {
+    if (el.type === "background" || !el.visible) continue
+    const b = getBounds(el)
+    const cx = b.x + b.w / 2
+    const cy = b.y + b.h / 2
+    if (
+      cx >= bounds.x - padding &&
+      cx <= bounds.x2 + padding &&
+      cy >= bounds.y - padding &&
+      cy <= bounds.y2 + padding
+    ) {
+      hits.push(el)
+    }
+  }
+  return hits
+}
+
+function App() {
+  const canvasRef = useRef(null)
+  const [elements, setElements] = useState([])
+  const [selectedIds, setSelectedIds] = useState([])
+  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 })
+  const [messages, setMessages] = useState([])
+  const [chatHistory, setChatHistory] = useState([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [status, setStatus] = useState(null)
+  const [reasoningText, setReasoningText] = useState("")
+  const [elapsed, setElapsed] = useState(0)
+  const [model, setModel] = useState(() => localStorage.getItem("tp_model") || DEFAULT_MODEL)
+  const [effort, setEffort] = useState(() => localStorage.getItem("tp_effort") || DEFAULT_EFFORT)
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem("openrouter_key") || "")
+  const [penStrokes, setPenStrokes] = useState([])
+  const [activeTool, setActiveTool] = useState("select")
+  const timerRef = useRef(null)
+  const elementsRef = useRef(elements)
+  elementsRef.current = elements
+
+  const handleApiKeyChange = useCallback((key) => {
+    setApiKey(key)
+    localStorage.setItem("openrouter_key", key)
+  }, [])
+
+  const handleModelChange = useCallback((id) => {
+    setModel(id)
+    localStorage.setItem("tp_model", id)
+  }, [])
+
+  const handleEffortChange = useCallback((level) => {
+    setEffort(level)
+    localStorage.setItem("tp_effort", level)
+  }, [])
+
+  const handleUpdateElement = useCallback((id, updates) => {
+    setElements((prev) =>
+      prev.map((el) => (el.id === id ? { ...el, ...updates } : el))
+    )
+  }, [])
+
+  const handleDeleteElement = useCallback(
+    (id) => {
+      setElements((prev) => prev.filter((el) => el.id !== id))
+      setSelectedIds((prev) => prev.filter((sid) => sid !== id))
+    },
+    []
+  )
+
+  const handleSelect = useCallback((idsOrFn) => {
+    if (typeof idsOrFn === "function") {
+      setSelectedIds((prev) => idsOrFn(prev))
+    } else {
+      setSelectedIds(idsOrFn)
+    }
+  }, [])
+
+  const handlePenStroke = useCallback((points) => {
+    setPenStrokes((prev) => [...prev, points])
+  }, [])
+
+  const startTimer = useCallback(() => {
+    setElapsed(0)
+    const start = Date.now()
+    timerRef.current = setInterval(() => {
+      setElapsed(Math.round((Date.now() - start) / 1000))
+    }, 500)
+  }, [])
+
+  const stopTimer = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current)
+      timerRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => stopTimer()
+  }, [stopTimer])
+
+  const applyToolCall = useCallback((tc) => {
+    const result = executeToolCall(tc)
+    if (!result) return null
+    if (result.__clear) {
+      setElements([])
+      return null
+    }
+    if (result.__update) {
+      setElements((prev) =>
+        prev.map((el) =>
+          el.id === result.id
+            ? { ...el, ...result.updates, createdAt: performance.now() }
+            : el
+        )
+      )
+      return result.id
+    }
+    setElements((prev) => {
+      if (result.type === "background") {
+        const without = prev.filter((e) => e.type !== "background")
+        return [result, ...without]
+      }
+      return [...prev, result]
+    })
+    return result.id
+  }, [])
+
+  const handleSend = useCallback(
+    async (text) => {
+      // Build selection context
+      const currentElements = elementsRef.current
+      const selected = selectedIds
+        .map((id) => currentElements.find((e) => e.id === id))
+        .filter(Boolean)
+
+      setSelectedIds([])
+
+      let userContent = text
+      if (selected.length > 0) {
+        const selDesc = selected.map(describeElement).join("\n")
+        const bounds = selected.map(getBounds)
+        const region = {
+          x: Math.min(...bounds.map((b) => b.x)),
+          y: Math.min(...bounds.map((b) => b.y)),
+          x2: Math.max(...bounds.map((b) => b.x + b.w)),
+          y2: Math.max(...bounds.map((b) => b.y + b.h)),
+        }
+        userContent = `[USER SELECTED ${selected.length} ELEMENT(S) ON CANVAS — region roughly (${Math.round(region.x)},${Math.round(region.y)}) to (${Math.round(region.x2)},${Math.round(region.y2)})]\n${selDesc}\n\n[USER'S QUESTION ABOUT SELECTION]: ${text}`
+      }
+
+      const userMsg = { role: "user", content: userContent }
+      const displayMsg = { role: "user", content: text, _selectionCount: selected.length }
+      setMessages((prev) => [...prev, displayMsg])
+      let runningHistory = [...chatHistory, userMsg]
+      setChatHistory(runningHistory)
+      setIsLoading(true)
+      setStatus(null)
+      setReasoningText("")
+      startTimer()
+
+      let round = 0
+
+      const runRound = async (history) => {
+        return new Promise((resolve) => {
+          let assistantText = ""
+          let toolCalls = []
+
+          streamChat({
+            apiKey,
+            model,
+            messages: history,
+            reasoning: effort === "low" ? undefined : { effort },
+            onStatus: (s) => setStatus(s),
+            onReasoning: (chunk) => {
+              setReasoningText((prev) => prev + chunk)
+            },
+            onText: (chunk) => {
+              assistantText += chunk
+              setMessages((prev) => {
+                const updated = [...prev]
+                const last = updated[updated.length - 1]
+                if (last?.role === "assistant" && !last.toolCalls?.length) {
+                  updated[updated.length - 1] = { ...last, content: assistantText }
+                } else {
+                  updated.push({ role: "assistant", content: assistantText })
+                }
+                return updated
+              })
+            },
+            onToolCall: (tc) => {
+              const elementId = applyToolCall(tc)
+              toolCalls.push({ ...tc, _elementId: elementId })
+            },
+            onDone: () => {
+              resolve({ assistantText, toolCalls })
+            },
+            onError: (err) => {
+              resolve({ assistantText: "", toolCalls: [], error: err })
+            },
+          })
+        })
+      }
+
+      while (round < MAX_TOOL_ROUNDS) {
+        round++
+        console.log(`[agent] round ${round}`)
+        const { assistantText, toolCalls, error } = await runRound(runningHistory)
+
+        if (error) {
+          setMessages((prev) => [
+            ...prev,
+            { role: "tool", content: `[ERROR] ${error}` },
+          ])
+          break
+        }
+
+        if (toolCalls.length > 0) {
+          const assistantMsg = {
+            role: "assistant",
+            content: assistantText,
+            toolCalls,
+          }
+
+          setMessages((prev) => {
+            const withoutStreaming = prev.filter(
+              (m, i) =>
+                !(
+                  m.role === "assistant" &&
+                  i === prev.length - 1 &&
+                  !m.toolCalls?.length
+                )
+            )
+            return [
+              ...withoutStreaming,
+              assistantMsg,
+              {
+                role: "tool",
+                content: `[OK] ${toolCalls.length} tool${toolCalls.length > 1 ? "s" : ""}: ${toolCalls.map((t) => t.function.name).join(", ")}`,
+              },
+            ]
+          })
+
+          const assistantHistoryMsg = {
+            role: "assistant",
+            content: assistantText || null,
+            tool_calls: toolCalls.map((tc) => ({
+              id: tc.id,
+              type: "function",
+              function: {
+                name: tc.function.name,
+                arguments: JSON.stringify(tc.function.arguments),
+              },
+            })),
+          }
+
+          const toolResults = toolCalls.map((tc) => ({
+            role: "tool",
+            tool_call_id: tc.id,
+            content: tc._elementId
+              ? `[OK] ${tc.function.name} — element_id: ${tc._elementId}`
+              : `[OK] ${tc.function.name} executed`,
+          }))
+
+          runningHistory = [...runningHistory, assistantHistoryMsg, ...toolResults]
+          setChatHistory(runningHistory)
+
+          console.log(`[agent] round ${round} done, ${toolCalls.length} tools called, looping...`)
+          setReasoningText("")
+          continue
+        }
+
+        if (assistantText) {
+          setChatHistory((prev) => [
+            ...prev,
+            { role: "assistant", content: assistantText },
+          ])
+        }
+        break
+      }
+
+      if (round >= MAX_TOOL_ROUNDS) {
+        console.warn(`[agent] hit max rounds (${MAX_TOOL_ROUNDS})`)
+        setMessages((prev) => [
+          ...prev,
+          { role: "tool", content: `[WARN] Stopped after ${MAX_TOOL_ROUNDS} rounds` },
+        ])
+      }
+
+      stopTimer()
+      setIsLoading(false)
+      setStatus(null)
+    },
+    [apiKey, model, effort, chatHistory, selectedIds, startTimer, stopTimer, applyToolCall]
+  )
+
+  const selectedElements = selectedIds
+    .map((id) => elements.find((e) => e.id === id))
+    .filter(Boolean)
+
+  return (
+    <div className="h-screen w-screen bg-black flex overflow-hidden">
+      <Canvas
+        canvasRef={canvasRef}
+        elements={elements}
+        selectedIds={selectedIds}
+        onSelect={handleSelect}
+        transform={transform}
+        onTransformChange={setTransform}
+      />
+      <ChatSidebar
+        messages={messages}
+        onSend={handleSend}
+        isLoading={isLoading}
+        status={status}
+        reasoningText={reasoningText}
+        elapsed={elapsed}
+        model={model}
+        onModelChange={handleModelChange}
+        effort={effort}
+        onEffortChange={handleEffortChange}
+        apiKey={apiKey}
+        onApiKeyChange={handleApiKeyChange}
+        selectedElements={selectedElements}
+        onUpdateElement={handleUpdateElement}
+        onDeleteElement={handleDeleteElement}
+      />
+    </div>
+  )
+}
+
+export default App

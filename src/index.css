@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+@theme {
+  --font-grotesk: "Space Grotesk", "DM Sans", system-ui, sans-serif;
+  --font-mono: "Space Mono", "JetBrains Mono", "SF Mono", monospace;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #333 transparent;
+}
+
+body {
+  font-family: "Space Grotesk", "DM Sans", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
