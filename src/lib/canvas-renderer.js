@@ -6,7 +6,7 @@ const EASE_OUT = (t) => 1 - (1 - t) * (1 - t) * (1 - t)
 function getAnimProgress(el) {
   if (!el.createdAt) return 1
   const age = performance.now() - el.createdAt
-  if (age >= ANIM_DURATION) return 1
+  if (age < 0 || age >= ANIM_DURATION) return 1
   return EASE_OUT(age / ANIM_DURATION)
 }
 

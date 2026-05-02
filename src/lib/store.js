@@ -108,7 +108,7 @@ export const useConvoStore = create(
               title: c.title,
               messages: c.messages,
               chatHistory: c.chatHistory,
-              elements: c.elements,
+              elements: c.elements.map(({ createdAt, ...el }) => el),
               transform: c.transform,
               createdAt: c.createdAt,
             },
