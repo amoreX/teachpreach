@@ -63,8 +63,9 @@ export default function ChatSidebar({
   onUpdateElement,
   onDeleteElement,
 }) {
+  const isProd = import.meta.env.VITE_IS_PROD === "true"
   const [input, setInput] = useState("")
-  const [showSettings, setShowSettings] = useState(!apiKey)
+  const [showSettings, setShowSettings] = useState(!isProd && !apiKey)
   const messagesEndRef = useRef(null)
   const { theme, toggleTheme } = useTheme()
 
@@ -103,17 +104,19 @@ export default function ChatSidebar({
           >
             {theme === "dark" ? <Sun size={16} strokeWidth={1.5} /> : <Moon size={16} strokeWidth={1.5} />}
           </button>
-          <button
-            onClick={() => setShowSettings((s) => !s)}
-            className="p-1.5 rounded text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
-          >
-            <Settings size={16} strokeWidth={1.5} />
-          </button>
+          {!isProd && (
+            <button
+              onClick={() => setShowSettings((s) => !s)}
+              className="p-1.5 rounded text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+            >
+              <Settings size={16} strokeWidth={1.5} />
+            </button>
+          )}
         </div>
       </div>
 
       {/* Settings */}
-      {showSettings && (
+      {!isProd && showSettings && (
         <div className="px-4 py-3 border-b border-[var(--border)]">
           <label className="block font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--text-tertiary)] mb-1.5">
             OPENROUTER API KEY
@@ -129,14 +132,16 @@ export default function ChatSidebar({
       )}
 
       {/* Model Selector */}
-      <div className="px-4 py-2 border-b border-[var(--border)]">
-        <ModelSelector
-          model={model}
-          onModelChange={onModelChange}
-          effort={effort}
-          onEffortChange={onEffortChange}
-        />
-      </div>
+      {!isProd && (
+        <div className="px-4 py-2 border-b border-[var(--border)]">
+          <ModelSelector
+            model={model}
+            onModelChange={onModelChange}
+            effort={effort}
+            onEffortChange={onEffortChange}
+          />
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0">

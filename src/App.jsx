@@ -72,6 +72,7 @@ function App() {
   const [effort, setEffort] = useState(() => localStorage.getItem("tp_effort") || DEFAULT_EFFORT)
   const [apiKey, setApiKey] = useState(() => localStorage.getItem("openrouter_key") || "")
   const [penStrokes, setPenStrokes] = useState([])
+  const [penRedoStack, setPenRedoStack] = useState([])
   const [activeTool, setActiveTool] = useState("select")
   const timerRef = useRef(null)
   const elementsRef = useRef(elements)
@@ -116,6 +117,23 @@ function App() {
 
   const handlePenStroke = useCallback((points) => {
     setPenStrokes((prev) => [...prev, points])
+    setPenRedoStack([])
+  }, [])
+
+  const handlePenUndo = useCallback(() => {
+    setPenStrokes((prev) => {
+      if (prev.length === 0) return prev
+      setPenRedoStack((redo) => [...redo, prev[prev.length - 1]])
+      return prev.slice(0, -1)
+    })
+  }, [])
+
+  const handlePenRedo = useCallback(() => {
+    setPenRedoStack((redo) => {
+      if (redo.length === 0) return redo
+      setPenStrokes((prev) => [...prev, redo[redo.length - 1]])
+      return redo.slice(0, -1)
+    })
   }, [])
 
   const startTimer = useCallback(() => {
@@ -194,6 +212,7 @@ function App() {
 
       setSelectedIds([])
       setPenStrokes([])
+      setPenRedoStack([])
 
       let userContent = text
       const hasPen = currentStrokes.length > 0
@@ -372,6 +391,9 @@ function App() {
         onTransformChange={setTransform}
         penStrokes={penStrokes}
         onPenStroke={handlePenStroke}
+        onPenUndo={handlePenUndo}
+        onPenRedo={handlePenRedo}
+        penRedoCount={penRedoStack.length}
         activeTool={activeTool}
         onToolChange={setActiveTool}
       />

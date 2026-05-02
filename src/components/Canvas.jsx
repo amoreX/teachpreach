@@ -2,7 +2,7 @@ import { useRef, useEffect, useCallback, useState } from "react"
 import { renderCanvas } from "../lib/canvas-renderer"
 import { hitTest, getBounds } from "../lib/element-store"
 import { getThemeColors, useTheme } from "../lib/theme"
-import { ZoomIn, ZoomOut, Maximize, MousePointer, Pen } from "lucide-react"
+import { ZoomIn, ZoomOut, Maximize, MousePointer, Pen, Undo2, Redo2 } from "lucide-react"
 
 export default function Canvas({
   canvasRef,
@@ -13,10 +13,14 @@ export default function Canvas({
   onTransformChange,
   penStrokes,
   onPenStroke,
+  onPenUndo,
+  onPenRedo,
+  penRedoCount,
   activeTool,
   onToolChange,
 }) {
   const { theme } = useTheme()
+  const isMac = navigator.platform.toUpperCase().includes("MAC")
   const containerRef = useRef(null)
   const isPanning = useRef(false)
   const isDragSelecting = useRef(false)
@@ -286,6 +290,14 @@ export default function Canvas({
         spaceRef.current = true
         setSpaceHeld(true)
       }
+      if (e.key === "z" && (e.metaKey || e.ctrlKey) && !e.shiftKey && e.target === document.body) {
+        e.preventDefault()
+        onPenUndo()
+      }
+      if (((e.key === "z" && e.shiftKey) || e.key === "y") && (e.metaKey || e.ctrlKey) && e.target === document.body) {
+        e.preventDefault()
+        onPenRedo()
+      }
       if (e.key === "p" && e.target === document.body) {
         onToolChange(activeTool === "pen" ? "select" : "pen")
       }
@@ -309,7 +321,7 @@ export default function Canvas({
       window.removeEventListener("keydown", onKeyDown)
       window.removeEventListener("keyup", onKeyUp)
     }
-  }, [activeTool, onToolChange, onSelect])
+  }, [activeTool, onToolChange, onSelect, onPenUndo, onPenRedo])
 
   const selCount = selectedIds.length
   const cursor = spaceHeld
@@ -393,6 +405,26 @@ export default function Canvas({
         >
           <Pen size={14} strokeWidth={1.5} />
         </button>
+        {activeTool === "pen" && (
+          <>
+            <button
+              onClick={onPenUndo}
+              disabled={penStrokes.length === 0}
+              className="p-2 bg-[var(--bg-surface)] border border-[var(--border-visible)] rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--text-tertiary)] transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default mt-1"
+              title={`Undo (${isMac ? "⌘Z" : "Ctrl+Z"})`}
+            >
+              <Undo2 size={14} strokeWidth={1.5} />
+            </button>
+            <button
+              onClick={onPenRedo}
+              disabled={penRedoCount === 0}
+              className="p-2 bg-[var(--bg-surface)] border border-[var(--border-visible)] rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--text-tertiary)] transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default"
+              title={`Redo (${isMac ? "⌘⇧Z" : "Ctrl+Shift+Z"})`}
+            >
+              <Redo2 size={14} strokeWidth={1.5} />
+            </button>
+          </>
+        )}
       </div>
 
       {/* Zoom controls */}
