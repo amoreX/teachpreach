@@ -84,6 +84,12 @@ GENERAL RULES:
 - When comparing things side by side, align them on the same Y axis so differences are obvious.
 - Prefer horizontal layouts for sequences/timelines, vertical for hierarchies/steps.
 
+SPATIAL AWARENESS:
+- Before adding new content near existing drawings, call get_canvas_snapshot to see current element positions and find free space.
+- The snapshot tells you the occupied region bounds and suggests free space coordinates. Use these to place new content without overlapping.
+- When the user asks you to add/annotate near existing content, ALWAYS snapshot first so you know exactly where things are.
+- If you need to rearrange elements to make room, use update_element to move them before adding new content.
+
 Canvas: dark bg (#111111), coords from (0,0) top-left, effectively infinite. Color palette: #E8E8E8 (text), #5B9BF6 (active/focus), #4A9E5C (done/success), #D4A843 (highlight/titles), #D71921 (error/alert), #FF6B6B (secondary accent), #A78BFA (tertiary), #34D399 (alt-success), #666666 (muted/edges), #444444 (disabled/default), #999999 (captions).`
 
 export async function streamChat({

@@ -270,10 +270,27 @@ function App() {
 
   const applyToolCall = useCallback((tc) => {
     const result = executeToolCall(tc)
-    if (!result) return null
+    if (!result) return { id: null }
+    if (result.__snapshot) {
+      const current = elementsRef.current.filter((e) => e.type !== "background" && e.visible !== false)
+      const snapshot = current.map((el) => {
+        const b = getBounds(el)
+        return `id:${el.id} type:${el.type} bounds:(${Math.round(b.x)},${Math.round(b.y)},${Math.round(b.w)}x${Math.round(b.h)})${el.text ? ` text:"${el.text}"` : ""}${el.fill ? ` fill:${el.fill}` : ""}${el.color ? ` color:${el.color}` : ""}`
+      })
+      const allBounds = current.map(getBounds)
+      let occupied = "empty canvas"
+      if (allBounds.length > 0) {
+        const minX = Math.min(...allBounds.map((b) => b.x))
+        const minY = Math.min(...allBounds.map((b) => b.y))
+        const maxX = Math.max(...allBounds.map((b) => b.x + b.w))
+        const maxY = Math.max(...allBounds.map((b) => b.y + b.h))
+        occupied = `occupied region: (${Math.round(minX)},${Math.round(minY)}) to (${Math.round(maxX)},${Math.round(maxY)}). Free space: right of x=${Math.round(maxX + 40)}, below y=${Math.round(maxY + 40)}`
+      }
+      return { id: null, content: `[CANVAS SNAPSHOT] ${current.length} elements. ${occupied}\n${snapshot.join("\n")}` }
+    }
     if (result.__clear) {
       setElements([])
-      return null
+      return { id: null }
     }
     if (result.__update) {
       setElements((prev) =>
@@ -283,7 +300,7 @@ function App() {
             : el
         )
       )
-      return result.id
+      return { id: result.id }
     }
     setElements((prev) => {
       if (result.type === "background") {
@@ -292,7 +309,7 @@ function App() {
       }
       return [...prev, result]
     })
-    return result.id
+    return { id: result.id }
   }, [])
 
   const handleSend = useCallback(
@@ -381,8 +398,8 @@ function App() {
               })
             },
             onToolCall: (tc) => {
-              const elementId = applyToolCall(tc)
-              toolCalls.push({ ...tc, _elementId: elementId })
+              const { id: elementId, content } = applyToolCall(tc)
+              toolCalls.push({ ...tc, _elementId: elementId, _content: content })
             },
             onDone: () => {
               resolve({ assistantText, toolCalls })
@@ -449,9 +466,11 @@ function App() {
           const toolResults = toolCalls.map((tc) => ({
             role: "tool",
             tool_call_id: tc.id,
-            content: tc._elementId
-              ? `[OK] ${tc.function.name} — element_id: ${tc._elementId}`
-              : `[OK] ${tc.function.name} executed`,
+            content: tc._content
+              ? tc._content
+              : tc._elementId
+                ? `[OK] ${tc.function.name} — element_id: ${tc._elementId}`
+                : `[OK] ${tc.function.name} executed`,
           }))
 
           runningHistory = [...runningHistory, assistantHistoryMsg, ...toolResults]

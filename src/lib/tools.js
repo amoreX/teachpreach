@@ -134,6 +134,17 @@ export const drawingTools = [
   {
     type: "function",
     function: {
+      name: "get_canvas_snapshot",
+      description: "Get a snapshot of all elements currently on the canvas with their positions and bounds. Call this before adding content near existing drawings to avoid overlaps, or to find free space for new content.",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "update_element",
       description: "Update properties of an existing element by ID. Use this to change colors, positions, sizes, or text of elements you previously drew. Every draw tool returns an element ID you can reference here.",
       parameters: {

@@ -56,6 +56,8 @@ export function executeToolCall(toolCall) {
         closed: a.closed || false,
         fill: a.fill || null,
       })
+    case "get_canvas_snapshot":
+      return { __snapshot: true }
     case "update_element": {
       const { id, ...updates } = a
       return { __update: true, id, updates }
