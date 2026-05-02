@@ -2,7 +2,8 @@ import { useRef, useEffect, useCallback, useState } from "react"
 import { renderCanvas } from "../lib/canvas-renderer"
 import { hitTest, getBounds } from "../lib/element-store"
 import { getThemeColors, useTheme } from "../lib/theme"
-import { ZoomIn, ZoomOut, Maximize, MousePointer, Pen, Undo2, Redo2, Grid3x3, Circle, Minus } from "lucide-react"
+import { ZoomIn, ZoomOut, Maximize, MousePointer, Pen, Undo2, Redo2, Grid3x3, Circle, Minus, Download } from "lucide-react"
+import { exportCanvasVideo } from "../lib/canvas-exporter"
 
 export default function Canvas({
   canvasRef,
@@ -31,6 +32,8 @@ export default function Canvas({
   const [selectionBox, setSelectionBox] = useState(null)
   const [spaceHeld, setSpaceHeld] = useState(false)
   const [gridMode, setGridMode] = useState(() => localStorage.getItem("tp_grid") || "dot")
+  const [exporting, setExporting] = useState(false)
+  const [exportProgress, setExportProgress] = useState(0)
   const spaceRef = useRef(false)
   const rafRef = useRef(null)
 
@@ -332,6 +335,20 @@ export default function Canvas({
     })
   }, [])
 
+  const handleExport = useCallback(async () => {
+    if (exporting) return
+    const visible = elements.filter((e) => e.type !== "background" && e.visible !== false)
+    if (visible.length === 0) return
+    setExporting(true)
+    setExportProgress(0)
+    try {
+      await exportCanvasVideo(elements, setExportProgress)
+    } catch (err) {
+      console.error("[export]", err)
+    }
+    setExporting(false)
+  }, [elements, exporting])
+
   const selCount = selectedIds.length
   const cursor = spaceHeld
     ? "cursor-grab"
@@ -465,8 +482,25 @@ export default function Canvas({
         </button>
       </div>
 
-      <div className="absolute bottom-4 right-4 font-mono text-[10px] tracking-[0.08em] uppercase text-[var(--text-disabled)]">
-        {elements.filter((e) => e.type !== "background").length} ELEMENTS
+      <div className="absolute bottom-4 right-4 flex items-center gap-2">
+        {exporting && (
+          <span className="font-mono text-[10px] tracking-[0.08em] uppercase text-[var(--accent-amber)]">
+            EXPORTING {exportProgress}%
+          </span>
+        )}
+        {elements.filter((e) => e.type !== "background").length > 0 && (
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="p-1.5 bg-[var(--bg-surface)] border border-[var(--border-visible)] rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--text-tertiary)] transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default"
+            title="Export video"
+          >
+            <Download size={14} strokeWidth={1.5} />
+          </button>
+        )}
+        <span className="font-mono text-[10px] tracking-[0.08em] uppercase text-[var(--text-disabled)]">
+          {elements.filter((e) => e.type !== "background").length} ELEMENTS
+        </span>
       </div>
     </div>
   )
