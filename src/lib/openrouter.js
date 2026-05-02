@@ -1,6 +1,8 @@
 import { drawingTools } from "./tools"
 
+const IS_PROD = import.meta.env.VITE_IS_PROD === "true"
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+const PROXY_URL = "/api/chat"
 
 const SYSTEM_PROMPT = `You are a teacher who explains concepts visually. You have a drawing canvas with tools to draw shapes, lines, text, and paths.
 
@@ -110,14 +112,17 @@ export async function streamChat({
   onStatus?.("connecting")
   console.log("[stream] connecting", { model, reasoning })
 
+  const url = IS_PROD ? PROXY_URL : OPENROUTER_URL
+  const headers = { "Content-Type": "application/json" }
+  if (!IS_PROD && apiKey) {
+    headers.Authorization = `Bearer ${apiKey}`
+  }
+
   let response
   try {
-    response = await fetch(OPENROUTER_URL, {
+    response = await fetch(url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers,
       body: JSON.stringify(body),
     })
   } catch (e) {

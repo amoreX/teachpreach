@@ -253,7 +253,7 @@ export default function ChatSidebar({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={
-              !apiKey
+              !isProd && !apiKey
                 ? "Set API key first"
                 : penStrokeCount > 0
                   ? "Ask about circled area..."
@@ -261,12 +261,12 @@ export default function ChatSidebar({
                   ? "Ask about selected elements..."
                   : "Describe what to draw..."
             }
-            disabled={!apiKey || isLoading}
+            disabled={(!isProd && !apiKey) || isLoading}
             className="flex-1 bg-transparent text-[var(--text-primary)] text-sm placeholder:text-[var(--text-disabled)] focus:outline-none disabled:opacity-40"
           />
           <button
             type="submit"
-            disabled={!input.trim() || isLoading || !apiKey}
+            disabled={!input.trim() || isLoading || (!isProd && !apiKey)}
             className="p-2 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] disabled:opacity-30 disabled:hover:text-[var(--text-tertiary)] transition-colors cursor-pointer disabled:cursor-default"
           >
             <Send size={16} strokeWidth={1.5} />
