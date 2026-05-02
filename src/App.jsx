@@ -5,6 +5,7 @@ import { streamChat } from "./lib/openrouter"
 import { executeToolCall } from "./lib/canvas-executor"
 import { DEFAULT_MODEL, DEFAULT_EFFORT } from "./lib/models"
 import { getBounds } from "./lib/element-store"
+import { useConvoStore } from "./lib/store"
 
 const MAX_TOOL_ROUNDS = 50
 
@@ -59,11 +60,90 @@ function findElementsInRegion(elements, bounds, padding = 20) {
 
 function App() {
   const canvasRef = useRef(null)
-  const [elements, setElements] = useState([])
+
+  const activeId = useConvoStore((s) => s.activeId)
+  const updateConvo = useConvoStore((s) => s.updateConvo)
+  const setConvoTitle = useConvoStore((s) => s.setTitle)
+
+  const prevIdRef = useRef(activeId)
+  const elementsRef = useRef([])
+  const messagesRef = useRef([])
+  const chatHistoryRef = useRef([])
+  const transformRef = useRef({ x: 0, y: 0, scale: 1 })
+
+  function loadConvo(id) {
+    const c = useConvoStore.getState().convos[id]
+    if (!c) return
+    setElements(c.elements)
+    setMessages(c.messages)
+    setChatHistory(c.chatHistory)
+    setTransform(c.transform)
+    setSelectedIds([])
+    setPenStrokes([])
+    setPenRedoStack([])
+    setActiveTool("select")
+  }
+
+  function saveCurrentToStore() {
+    const id = prevIdRef.current
+    if (!useConvoStore.getState().convos[id]) return
+    updateConvo(id, {
+      elements: elementsRef.current,
+      messages: messagesRef.current,
+      chatHistory: chatHistoryRef.current,
+      transform: transformRef.current,
+    })
+  }
+
+  const [elements, _setElements] = useState(() => {
+    const c = useConvoStore.getState().convos[activeId]
+    return c ? c.elements : []
+  })
+  const setElements = useCallback((v) => {
+    _setElements((prev) => {
+      const next = typeof v === "function" ? v(prev) : v
+      elementsRef.current = next
+      return next
+    })
+  }, [])
+
+  const [messages, _setMessages] = useState(() => {
+    const c = useConvoStore.getState().convos[activeId]
+    return c ? c.messages : []
+  })
+  const setMessages = useCallback((v) => {
+    _setMessages((prev) => {
+      const next = typeof v === "function" ? v(prev) : v
+      messagesRef.current = next
+      return next
+    })
+  }, [])
+
+  const [chatHistory, _setChatHistory] = useState(() => {
+    const c = useConvoStore.getState().convos[activeId]
+    return c ? c.chatHistory : []
+  })
+  const setChatHistory = useCallback((v) => {
+    _setChatHistory((prev) => {
+      const next = typeof v === "function" ? v(prev) : v
+      chatHistoryRef.current = next
+      return next
+    })
+  }, [])
+
+  const [transform, _setTransform] = useState(() => {
+    const c = useConvoStore.getState().convos[activeId]
+    return c ? c.transform : { x: 0, y: 0, scale: 1 }
+  })
+  const setTransform = useCallback((v) => {
+    _setTransform((prev) => {
+      const next = typeof v === "function" ? v(prev) : v
+      transformRef.current = next
+      return next
+    })
+  }, [])
+
   const [selectedIds, setSelectedIds] = useState([])
-  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 })
-  const [messages, setMessages] = useState([])
-  const [chatHistory, setChatHistory] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [status, setStatus] = useState(null)
   const [reasoningText, setReasoningText] = useState("")
@@ -75,8 +155,46 @@ function App() {
   const [penRedoStack, setPenRedoStack] = useState([])
   const [activeTool, setActiveTool] = useState("select")
   const timerRef = useRef(null)
-  const elementsRef = useRef(elements)
-  elementsRef.current = elements
+
+  // Switch conversations: save old, load new
+  useEffect(() => {
+    if (prevIdRef.current !== activeId) {
+      saveCurrentToStore()
+      loadConvo(activeId)
+      prevIdRef.current = activeId
+    }
+  }, [activeId])
+
+  // Periodically persist current convo (debounced on unmount / before unload)
+  useEffect(() => {
+    const onBeforeUnload = () => saveCurrentToStore()
+    window.addEventListener("beforeunload", onBeforeUnload)
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload)
+      saveCurrentToStore()
+    }
+  }, [])
+
+  // Sync to store after each send completes
+  const syncToStore = useCallback(() => {
+    const id = useConvoStore.getState().activeId
+    if (!useConvoStore.getState().convos[id]) return
+    updateConvo(id, {
+      elements: elementsRef.current,
+      messages: messagesRef.current,
+      chatHistory: chatHistoryRef.current,
+      transform: transformRef.current,
+    })
+    // Auto-title
+    const c = useConvoStore.getState().convos[id]
+    if (c && c.title === "New Chat" && messagesRef.current.length > 0) {
+      const first = messagesRef.current.find((m) => m.role === "user")
+      if (first) {
+        const title = first.content.slice(0, 40) + (first.content.length > 40 ? "..." : "")
+        setConvoTitle(id, title)
+      }
+    }
+  }, [updateConvo, setConvoTitle])
 
   const handleApiKeyChange = useCallback((key) => {
     setApiKey(key)
@@ -187,12 +305,10 @@ function App() {
       const currentElements = elementsRef.current
       const currentStrokes = penStrokes
 
-      // Find elements from selection
       const selected = selectedIds
         .map((id) => currentElements.find((e) => e.id === id))
         .filter(Boolean)
 
-      // Find elements from pen annotations (what the user circled/pointed at)
       let circledElements = []
       let strokeBounds = null
       if (currentStrokes.length > 0) {
@@ -200,7 +316,6 @@ function App() {
         circledElements = findElementsInRegion(currentElements, strokeBounds)
       }
 
-      // Merge both contexts, deduplicate
       const allReferenced = [...selected]
       const existingIds = new Set(selected.map((e) => e.id))
       for (const el of circledElements) {
@@ -372,8 +487,9 @@ function App() {
       stopTimer()
       setIsLoading(false)
       setStatus(null)
+      syncToStore()
     },
-    [apiKey, model, effort, chatHistory, selectedIds, penStrokes, startTimer, stopTimer, applyToolCall]
+    [apiKey, model, effort, chatHistory, selectedIds, penStrokes, startTimer, stopTimer, applyToolCall, syncToStore]
   )
 
   const selectedElements = selectedIds

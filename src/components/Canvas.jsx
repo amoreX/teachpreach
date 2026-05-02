@@ -2,7 +2,7 @@ import { useRef, useEffect, useCallback, useState } from "react"
 import { renderCanvas } from "../lib/canvas-renderer"
 import { hitTest, getBounds } from "../lib/element-store"
 import { getThemeColors, useTheme } from "../lib/theme"
-import { ZoomIn, ZoomOut, Maximize, MousePointer, Pen, Undo2, Redo2 } from "lucide-react"
+import { ZoomIn, ZoomOut, Maximize, MousePointer, Pen, Undo2, Redo2, Grid3x3, Circle, Minus } from "lucide-react"
 
 export default function Canvas({
   canvasRef,
@@ -30,6 +30,7 @@ export default function Canvas({
   const dragStart = useRef(null)
   const [selectionBox, setSelectionBox] = useState(null)
   const [spaceHeld, setSpaceHeld] = useState(false)
+  const [gridMode, setGridMode] = useState(() => localStorage.getItem("tp_grid") || "dot")
   const spaceRef = useRef(false)
   const rafRef = useRef(null)
 
@@ -323,6 +324,14 @@ export default function Canvas({
     }
   }, [activeTool, onToolChange, onSelect, onPenUndo, onPenRedo])
 
+  const cycleGrid = useCallback(() => {
+    setGridMode((prev) => {
+      const next = prev === "dot" ? "grid" : prev === "grid" ? "none" : "dot"
+      localStorage.setItem("tp_grid", next)
+      return next
+    })
+  }, [])
+
   const selCount = selectedIds.length
   const cursor = spaceHeld
     ? "cursor-grab"
@@ -340,14 +349,20 @@ export default function Canvas({
       onMouseLeave={handleMouseUp}
       onContextMenu={(e) => e.preventDefault()}
     >
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          backgroundImage: "radial-gradient(circle, var(--dot-grid) 0.5px, transparent 0.5px)",
-          backgroundSize: "12px 12px",
-          opacity: 0.4,
-        }}
-      />
+      {gridMode !== "none" && (
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={gridMode === "dot" ? {
+            backgroundImage: "radial-gradient(circle, var(--dot-grid) 0.5px, transparent 0.5px)",
+            backgroundSize: "12px 12px",
+            opacity: 0.4,
+          } : {
+            backgroundImage: "linear-gradient(var(--dot-grid) 1px, transparent 1px), linear-gradient(90deg, var(--dot-grid) 1px, transparent 1px)",
+            backgroundSize: "24px 24px",
+            opacity: 0.15,
+          }}
+        />
+      )}
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
 
       {selectionBox && selectionBox.w > 2 && (
@@ -440,6 +455,13 @@ export default function Canvas({
         </button>
         <button onClick={resetView} className="p-1.5 bg-[var(--bg-surface)] border border-[var(--border-visible)] rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--text-tertiary)] transition-colors cursor-pointer ml-1">
           <Maximize size={14} strokeWidth={1.5} />
+        </button>
+        <button
+          onClick={cycleGrid}
+          className="p-1.5 bg-[var(--bg-surface)] border border-[var(--border-visible)] rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--text-tertiary)] transition-colors cursor-pointer ml-1"
+          title={`Grid: ${gridMode}`}
+        >
+          {gridMode === "dot" ? <Circle size={14} strokeWidth={1.5} /> : gridMode === "grid" ? <Grid3x3 size={14} strokeWidth={1.5} /> : <Minus size={14} strokeWidth={1.5} />}
         </button>
       </div>
 

@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from "react"
-import { Send, Settings, Sun, Moon } from "lucide-react"
+import { Send, Settings, Sun, Moon, Plus, Trash2, ChevronDown } from "lucide-react"
 import Markdown from "react-markdown"
 import ModelSelector from "./ModelSelector"
 import PropertiesPanel from "./PropertiesPanel"
 import { useTheme } from "../lib/theme"
+import { useConvoStore } from "../lib/store"
 
 function collapseMessages(messages) {
   const filtered = messages.filter((m) => m.role !== "system")
@@ -89,14 +90,28 @@ export default function ChatSidebar({
     drawing: "DRAWING",
   }
 
+  const { convos, order, activeId, newConvo, switchConvo, deleteConvo } = useConvoStore()
+  const [showConvos, setShowConvos] = useState(false)
+
   return (
     <div className="w-[380px] min-w-[380px] border-l border-[var(--border)] bg-[var(--bg-page)] flex flex-col h-full">
       {/* Header */}
       <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
-        <span className="font-mono text-[11px] tracking-[0.08em] uppercase text-[var(--text-secondary)]">
-          CHAT
-        </span>
+        <button
+          onClick={() => setShowConvos((s) => !s)}
+          className="flex items-center gap-1.5 font-mono text-[11px] tracking-[0.08em] uppercase text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+        >
+          <span className="truncate max-w-[160px]">{convos[activeId]?.title || "CHAT"}</span>
+          <ChevronDown size={12} strokeWidth={1.5} className={`transition-transform ${showConvos ? "rotate-180" : ""}`} />
+        </button>
         <div className="flex items-center gap-1">
+          <button
+            onClick={() => { newConvo(); setShowConvos(false) }}
+            className="p-1.5 rounded text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+            title="New chat"
+          >
+            <Plus size={16} strokeWidth={1.5} />
+          </button>
           <button
             onClick={toggleTheme}
             className="p-1.5 rounded text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
@@ -114,6 +129,36 @@ export default function ChatSidebar({
           )}
         </div>
       </div>
+
+      {/* Conversation list */}
+      {showConvos && (
+        <div className="border-b border-[var(--border)] max-h-[240px] overflow-y-auto">
+          {order.map((id) => {
+            const c = convos[id]
+            if (!c) return null
+            const isActive = id === activeId
+            return (
+              <div
+                key={id}
+                className={`flex items-center gap-2 px-4 py-2 cursor-pointer transition-colors ${
+                  isActive
+                    ? "bg-[var(--bg-raised)] text-[var(--text-primary)]"
+                    : "text-[var(--text-secondary)] hover:bg-[var(--bg-surface)] hover:text-[var(--text-primary)]"
+                }`}
+                onClick={() => { switchConvo(id); setShowConvos(false) }}
+              >
+                <span className="flex-1 truncate text-[13px]">{c.title}</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); deleteConvo(id) }}
+                  className="p-0.5 text-[var(--text-disabled)] hover:text-[var(--accent-red)] transition-colors cursor-pointer"
+                >
+                  <Trash2 size={12} strokeWidth={1.5} />
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* Settings */}
       {!isProd && showSettings && (
