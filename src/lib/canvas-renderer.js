@@ -10,7 +10,7 @@ function getAnimProgress(el) {
   return EASE_OUT(age / ANIM_DURATION)
 }
 
-export function renderCanvas(ctx, elements, transform, selectedIds, canvasWidth, canvasHeight, penStrokes = [], activeStroke = []) {
+export function renderCanvas(ctx, elements, transform, selectedIds, canvasWidth, canvasHeight, penStrokes = [], activeStroke = [], themeColors = {}) {
   const dpr = window.devicePixelRatio || 1
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   ctx.clearRect(0, 0, canvasWidth, canvasHeight)
@@ -31,13 +31,13 @@ export function renderCanvas(ctx, elements, transform, selectedIds, canvasWidth,
     if (!el.visible || el.type === "background") continue
     const t = getAnimProgress(el)
     if (t < 1) hasAnimating = true
-    renderElement(ctx, el, t)
+    renderElement(ctx, el, t, themeColors)
   }
 
   if (selectedIds?.length > 0) {
     const idSet = new Set(selectedIds)
     for (const el of elements) {
-      if (idSet.has(el.id)) renderSelection(ctx, el, transform.scale)
+      if (idSet.has(el.id)) renderSelection(ctx, el, transform.scale, themeColors)
     }
   }
 
@@ -52,7 +52,7 @@ export function renderCanvas(ctx, elements, transform, selectedIds, canvasWidth,
     for (let i = 1; i < stroke.length; i++) {
       ctx.lineTo(stroke[i].x, stroke[i].y)
     }
-    ctx.strokeStyle = "#D71921"
+    ctx.strokeStyle = themeColors.penStroke || "#D71921"
     ctx.lineWidth = 2.5 / transform.scale
     ctx.lineCap = "round"
     ctx.lineJoin = "round"
@@ -66,7 +66,7 @@ export function renderCanvas(ctx, elements, transform, selectedIds, canvasWidth,
   return hasAnimating
 }
 
-function renderElement(ctx, el, t) {
+function renderElement(ctx, el, t, themeColors = {}) {
   ctx.save()
   ctx.globalAlpha = t
 
@@ -74,6 +74,7 @@ function renderElement(ctx, el, t) {
   const cx = bounds.x + bounds.w / 2
   const cy = bounds.y + bounds.h / 2
   const scale = 0.85 + 0.15 * t
+  const defaultColor = themeColors.textPrimary || "#E8E8E8"
 
   ctx.translate(cx, cy)
   ctx.scale(scale, scale)
@@ -86,7 +87,7 @@ function renderElement(ctx, el, t) {
         ctx.fillRect(el.x, el.y, el.width, el.height)
       }
       if (el.stroke || !el.fill) {
-        ctx.strokeStyle = el.stroke || "#E8E8E8"
+        ctx.strokeStyle = el.stroke || defaultColor
         ctx.lineWidth = el.strokeWidth || 2
         ctx.strokeRect(el.x, el.y, el.width, el.height)
       }
@@ -100,7 +101,7 @@ function renderElement(ctx, el, t) {
         ctx.fill()
       }
       if (el.stroke || !el.fill) {
-        ctx.strokeStyle = el.stroke || "#E8E8E8"
+        ctx.strokeStyle = el.stroke || defaultColor
         ctx.lineWidth = el.strokeWidth || 2
         ctx.stroke()
       }
@@ -110,13 +111,13 @@ function renderElement(ctx, el, t) {
       ctx.beginPath()
       ctx.moveTo(el.x1, el.y1)
       ctx.lineTo(el.x2, el.y2)
-      ctx.strokeStyle = el.color || "#E8E8E8"
+      ctx.strokeStyle = el.color || defaultColor
       ctx.lineWidth = el.width || 2
       ctx.stroke()
       break
     }
     case "text": {
-      ctx.fillStyle = el.color || "#E8E8E8"
+      ctx.fillStyle = el.color || defaultColor
       ctx.font = `${el.fontSize || 16}px ${el.fontFamily || "Space Grotesk, sans-serif"}`
       ctx.textAlign = el.align || "left"
       ctx.textBaseline = el.baseline || "alphabetic"
@@ -137,7 +138,7 @@ function renderElement(ctx, el, t) {
         ctx.fillStyle = el.fill
         ctx.fill()
       }
-      ctx.strokeStyle = el.color || "#E8E8E8"
+      ctx.strokeStyle = el.color || defaultColor
       ctx.lineWidth = el.width || 2
       ctx.stroke()
       break
@@ -147,13 +148,14 @@ function renderElement(ctx, el, t) {
   ctx.restore()
 }
 
-function renderSelection(ctx, el, scale) {
+function renderSelection(ctx, el, scale, themeColors = {}) {
   const bounds = getBounds(el)
   const pad = 6 / scale
   const handleSize = 6 / scale
   const lineWidth = 1.5 / scale
+  const selColor = themeColors.selectionBg || "#5B9BF6"
 
-  ctx.strokeStyle = "#5B9BF6"
+  ctx.strokeStyle = selColor
   ctx.lineWidth = lineWidth
   ctx.setLineDash([4 / scale, 4 / scale])
   ctx.strokeRect(
@@ -164,7 +166,7 @@ function renderSelection(ctx, el, scale) {
   )
   ctx.setLineDash([])
 
-  ctx.fillStyle = "#5B9BF6"
+  ctx.fillStyle = selColor
   const corners = [
     [bounds.x - pad, bounds.y - pad],
     [bounds.x + bounds.w + pad, bounds.y - pad],

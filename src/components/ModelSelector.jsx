@@ -88,54 +88,54 @@ export default function ModelSelector({ model, onModelChange, effort, onEffortCh
       <div ref={dropdownRef} className="relative">
         <button
           onClick={() => setOpen((s) => !s)}
-          className="w-full flex items-center justify-between py-2 text-sm text-[#e8e8e8] cursor-pointer group"
+          className="w-full flex items-center justify-between py-2 text-sm text-[var(--text-primary)] cursor-pointer group"
         >
           <div className="flex items-center gap-2 min-w-0">
             {currentModel?.supportsReasoning && (
-              <Zap size={12} strokeWidth={1.5} className="text-[#D4A843] shrink-0" />
+              <Zap size={12} strokeWidth={1.5} className="text-[var(--accent-amber)] shrink-0" />
             )}
             <span className="font-[Space_Grotesk] truncate">{displayName}</span>
           </div>
           <ChevronDown
             size={14}
             strokeWidth={1.5}
-            className={`text-[#666] group-hover:text-[#999] transition-all shrink-0 ml-2 ${open ? "rotate-180" : ""}`}
+            className={`text-[var(--text-tertiary)] group-hover:text-[var(--text-secondary)] transition-all shrink-0 ml-2 ${open ? "rotate-180" : ""}`}
           />
         </button>
 
         {open && (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-[#111] border border-[#333] rounded-lg z-20 overflow-hidden max-h-[400px] flex flex-col">
+          <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--bg-surface)] border border-[var(--border-visible)] rounded-lg z-20 overflow-hidden max-h-[400px] flex flex-col">
             {/* Search */}
-            <div className="px-3 py-2 border-b border-[#222] flex items-center gap-2">
-              <Search size={13} strokeWidth={1.5} className="text-[#666] shrink-0" />
+            <div className="px-3 py-2 border-b border-[var(--border)] flex items-center gap-2">
+              <Search size={13} strokeWidth={1.5} className="text-[var(--text-tertiary)] shrink-0" />
               <input
                 ref={searchRef}
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search models..."
-                className="flex-1 bg-transparent text-sm text-[#e8e8e8] placeholder:text-[#444] focus:outline-none font-[Space_Grotesk]"
+                className="flex-1 bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-disabled)] focus:outline-none font-[Space_Grotesk]"
               />
             </div>
 
             <div className="overflow-y-auto flex-1">
               {loading && (
                 <div className="flex items-center gap-2 px-3 py-4 justify-center">
-                  <Loader2 size={14} strokeWidth={1.5} className="text-[#666] animate-spin" />
-                  <span className="font-mono text-[11px] tracking-[0.08em] uppercase text-[#666]">
+                  <Loader2 size={14} strokeWidth={1.5} className="text-[var(--text-tertiary)] animate-spin" />
+                  <span className="font-mono text-[11px] tracking-[0.08em] uppercase text-[var(--text-tertiary)]">
                     LOADING MODELS...
                   </span>
                 </div>
               )}
 
               {error && (
-                <div className="px-3 py-3 text-[12px] text-[#D71921]">[ERROR] {error}</div>
+                <div className="px-3 py-3 text-[12px] text-[var(--accent-red)]">[ERROR] {error}</div>
               )}
 
               {groups &&
                 Object.entries(groups).map(([provider, models]) => (
                   <div key={provider}>
-                    <div className="px-3 py-1.5 font-mono text-[10px] tracking-[0.1em] uppercase text-[#666] bg-[#0a0a0a] sticky top-0">
+                    <div className="px-3 py-1.5 font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--text-tertiary)] bg-[var(--bg-inset)] sticky top-0">
                       {provider}
                     </div>
                     {models.map((m) => (
@@ -149,18 +149,18 @@ export default function ModelSelector({ model, onModelChange, effort, onEffortCh
                         }}
                         className={`w-full text-left px-3 py-2 text-[13px] cursor-pointer transition-colors flex items-center justify-between gap-2 ${
                           m.id === model
-                            ? "text-white bg-[#1a1a1a] border-l-2 border-l-[#D71921]"
-                            : "text-[#999] hover:text-[#e8e8e8] hover:bg-[#151515] border-l-2 border-l-transparent"
+                            ? "text-[var(--text-display)] bg-[var(--bg-raised)] border-l-2 border-l-[var(--accent-red)]"
+                            : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)] border-l-2 border-l-transparent"
                         }`}
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           {m.supportsReasoning && (
-                            <Zap size={11} strokeWidth={1.5} className="text-[#D4A843] shrink-0" />
+                            <Zap size={11} strokeWidth={1.5} className="text-[var(--accent-amber)] shrink-0" />
                           )}
                           <span className="font-[Space_Grotesk] truncate">{m.name}</span>
                         </div>
                         {m.pricing.prompt > 0 && (
-                          <span className="font-mono text-[10px] text-[#444] shrink-0">
+                          <span className="font-mono text-[10px] text-[var(--text-disabled)] shrink-0">
                             ${(m.pricing.prompt * 1_000_000).toFixed(1)}
                           </span>
                         )}
@@ -172,7 +172,7 @@ export default function ModelSelector({ model, onModelChange, effort, onEffortCh
               {!search && !showAll && (
                 <button
                   onClick={() => setShowAll(true)}
-                  className="w-full px-3 py-2.5 text-[12px] text-[#666] hover:text-[#999] font-mono tracking-[0.04em] uppercase cursor-pointer transition-colors border-t border-[#222]"
+                  className="w-full px-3 py-2.5 text-[12px] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] font-mono tracking-[0.04em] uppercase cursor-pointer transition-colors border-t border-[var(--border)]"
                 >
                   SHOW ALL MODELS
                 </button>
@@ -185,18 +185,18 @@ export default function ModelSelector({ model, onModelChange, effort, onEffortCh
       {/* Effort Level */}
       {currentModel?.supportsReasoning && (
         <div>
-          <span className="block font-mono text-[10px] tracking-[0.1em] uppercase text-[#666] mb-1.5">
+          <span className="block font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--text-tertiary)] mb-1.5">
             REASONING EFFORT
           </span>
-          <div className="flex border border-[#333] rounded overflow-hidden">
+          <div className="flex border border-[var(--border-visible)] rounded overflow-hidden">
             {EFFORT_LEVELS.map((level) => (
               <button
                 key={level.value}
                 onClick={() => onEffortChange(level.value)}
                 className={`flex-1 py-1.5 font-mono text-[11px] tracking-[0.06em] cursor-pointer transition-colors ${
                   effort === level.value
-                    ? "bg-[#e8e8e8] text-black"
-                    : "text-[#666] hover:text-[#999]"
+                    ? "bg-[var(--active-bg)] text-[var(--active-text)]"
+                    : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
                 }`}
               >
                 {level.label}

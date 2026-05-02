@@ -166,29 +166,54 @@ function App() {
 
   const handleSend = useCallback(
     async (text) => {
-      // Build selection context
       const currentElements = elementsRef.current
+      const currentStrokes = penStrokes
+
+      // Find elements from selection
       const selected = selectedIds
         .map((id) => currentElements.find((e) => e.id === id))
         .filter(Boolean)
 
-      setSelectedIds([])
-
-      let userContent = text
-      if (selected.length > 0) {
-        const selDesc = selected.map(describeElement).join("\n")
-        const bounds = selected.map(getBounds)
-        const region = {
-          x: Math.min(...bounds.map((b) => b.x)),
-          y: Math.min(...bounds.map((b) => b.y)),
-          x2: Math.max(...bounds.map((b) => b.x + b.w)),
-          y2: Math.max(...bounds.map((b) => b.y + b.h)),
-        }
-        userContent = `[USER SELECTED ${selected.length} ELEMENT(S) ON CANVAS — region roughly (${Math.round(region.x)},${Math.round(region.y)}) to (${Math.round(region.x2)},${Math.round(region.y2)})]\n${selDesc}\n\n[USER'S QUESTION ABOUT SELECTION]: ${text}`
+      // Find elements from pen annotations (what the user circled/pointed at)
+      let circledElements = []
+      let strokeBounds = null
+      if (currentStrokes.length > 0) {
+        strokeBounds = getStrokeBounds(currentStrokes)
+        circledElements = findElementsInRegion(currentElements, strokeBounds)
       }
 
+      // Merge both contexts, deduplicate
+      const allReferenced = [...selected]
+      const existingIds = new Set(selected.map((e) => e.id))
+      for (const el of circledElements) {
+        if (!existingIds.has(el.id)) {
+          allReferenced.push(el)
+          existingIds.add(el.id)
+        }
+      }
+
+      setSelectedIds([])
+      setPenStrokes([])
+
+      let userContent = text
+      const hasPen = currentStrokes.length > 0
+      const hasSel = selected.length > 0
+      if (allReferenced.length > 0) {
+        const desc = allReferenced.map(describeElement).join("\n")
+        const allBounds = allReferenced.map(getBounds)
+        const region = {
+          x: Math.min(...allBounds.map((b) => b.x)),
+          y: Math.min(...allBounds.map((b) => b.y)),
+          x2: Math.max(...allBounds.map((b) => b.x + b.w)),
+          y2: Math.max(...allBounds.map((b) => b.y + b.h)),
+        }
+        const method = hasPen ? "CIRCLED/POINTED AT" : "SELECTED"
+        userContent = `[USER ${method} ${allReferenced.length} ELEMENT(S) ON CANVAS — region roughly (${Math.round(region.x)},${Math.round(region.y)}) to (${Math.round(region.x2)},${Math.round(region.y2)})]\n${desc}\n\n[USER'S QUESTION]: ${text}`
+      }
+
+      const refCount = allReferenced.length
       const userMsg = { role: "user", content: userContent }
-      const displayMsg = { role: "user", content: text, _selectionCount: selected.length }
+      const displayMsg = { role: "user", content: text, _selectionCount: hasSel ? selected.length : 0, _penCount: hasPen ? currentStrokes.length : 0 }
       setMessages((prev) => [...prev, displayMsg])
       let runningHistory = [...chatHistory, userMsg]
       setChatHistory(runningHistory)
@@ -329,7 +354,7 @@ function App() {
       setIsLoading(false)
       setStatus(null)
     },
-    [apiKey, model, effort, chatHistory, selectedIds, startTimer, stopTimer, applyToolCall]
+    [apiKey, model, effort, chatHistory, selectedIds, penStrokes, startTimer, stopTimer, applyToolCall]
   )
 
   const selectedElements = selectedIds
@@ -337,7 +362,7 @@ function App() {
     .filter(Boolean)
 
   return (
-    <div className="h-screen w-screen bg-black flex overflow-hidden">
+    <div className="h-screen w-screen bg-[var(--bg-page)] flex overflow-hidden">
       <Canvas
         canvasRef={canvasRef}
         elements={elements}
@@ -345,6 +370,10 @@ function App() {
         onSelect={handleSelect}
         transform={transform}
         onTransformChange={setTransform}
+        penStrokes={penStrokes}
+        onPenStroke={handlePenStroke}
+        activeTool={activeTool}
+        onToolChange={setActiveTool}
       />
       <ChatSidebar
         messages={messages}
@@ -360,6 +389,7 @@ function App() {
         apiKey={apiKey}
         onApiKeyChange={handleApiKeyChange}
         selectedElements={selectedElements}
+        penStrokeCount={penStrokes.length}
         onUpdateElement={handleUpdateElement}
         onDeleteElement={handleDeleteElement}
       />

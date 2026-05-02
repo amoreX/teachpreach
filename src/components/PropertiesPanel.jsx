@@ -55,14 +55,14 @@ export default function PropertiesPanel({ element, onUpdate, onDelete }) {
   }
 
   return (
-    <div className="border-t border-[#222] px-4 py-3 space-y-2">
+    <div className="border-t border-[var(--border)] px-4 py-3 space-y-2">
       <div className="flex items-center justify-between">
-        <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-[#999]">
+        <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--text-secondary)]">
           {element.type} #{element.id}
         </span>
         <button
           onClick={() => onDelete(element.id)}
-          className="p-1 text-[#666] hover:text-[#D71921] transition-colors cursor-pointer"
+          className="p-1 text-[var(--text-tertiary)] hover:text-[var(--accent-red)] transition-colors cursor-pointer"
         >
           <Trash2 size={13} strokeWidth={1.5} />
         </button>
@@ -74,7 +74,7 @@ export default function PropertiesPanel({ element, onUpdate, onDelete }) {
             key={field.key}
             className={field.type === "text" ? "col-span-2" : ""}
           >
-            <label className="block font-mono text-[9px] tracking-[0.1em] uppercase text-[#666] mb-0.5">
+            <label className="block font-mono text-[9px] tracking-[0.1em] uppercase text-[var(--text-tertiary)] mb-0.5">
               {field.label}
             </label>
             {field.type === "color" ? (
@@ -83,14 +83,14 @@ export default function PropertiesPanel({ element, onUpdate, onDelete }) {
                   type="color"
                   value={element[field.key] || "#E8E8E8"}
                   onChange={(e) => handleChange(field.key, e.target.value, "color")}
-                  className="w-5 h-5 rounded border border-[#333] bg-transparent cursor-pointer [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-none [&::-webkit-color-swatch]:rounded"
+                  className="w-5 h-5 rounded border border-[var(--border-visible)] bg-transparent cursor-pointer [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-none [&::-webkit-color-swatch]:rounded"
                 />
                 <input
                   type="text"
                   value={element[field.key] || ""}
                   onChange={(e) => handleChange(field.key, e.target.value, "color")}
                   placeholder="none"
-                  className="flex-1 bg-transparent border-b border-[#333] text-[12px] font-mono text-[#e8e8e8] py-0.5 focus:outline-none focus:border-[#666] placeholder:text-[#333]"
+                  className="flex-1 bg-transparent border-b border-[var(--border-visible)] text-[12px] font-mono text-[var(--text-primary)] py-0.5 focus:outline-none focus:border-[var(--text-tertiary)] placeholder:text-[var(--text-subtle)]"
                 />
               </div>
             ) : (
@@ -98,7 +98,7 @@ export default function PropertiesPanel({ element, onUpdate, onDelete }) {
                 type={field.type === "number" ? "number" : "text"}
                 value={element[field.key] ?? ""}
                 onChange={(e) => handleChange(field.key, e.target.value, field.type)}
-                className="w-full bg-transparent border-b border-[#333] text-[12px] font-mono text-[#e8e8e8] py-0.5 focus:outline-none focus:border-[#666]"
+                className="w-full bg-transparent border-b border-[var(--border-visible)] text-[12px] font-mono text-[var(--text-primary)] py-0.5 focus:outline-none focus:border-[var(--text-tertiary)]"
               />
             )}
           </div>

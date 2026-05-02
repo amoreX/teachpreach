@@ -1,6 +1,7 @@
 import { useRef, useEffect, useCallback, useState } from "react"
 import { renderCanvas } from "../lib/canvas-renderer"
 import { hitTest, getBounds } from "../lib/element-store"
+import { getThemeColors, useTheme } from "../lib/theme"
 import { ZoomIn, ZoomOut, Maximize, MousePointer, Pen } from "lucide-react"
 
 export default function Canvas({
@@ -15,6 +16,7 @@ export default function Canvas({
   activeTool,
   onToolChange,
 }) {
+  const { theme } = useTheme()
   const containerRef = useRef(null)
   const isPanning = useRef(false)
   const isDragSelecting = useRef(false)
@@ -39,11 +41,12 @@ export default function Canvas({
     if (!canvas) return
     const ctx = canvas.getContext("2d")
     const { w, h } = getCanvasSize()
-    const hasAnimating = renderCanvas(ctx, elements, transform, selectedIds, w, h, penStrokes, currentStroke.current)
+    const themeColors = getThemeColors()
+    const hasAnimating = renderCanvas(ctx, elements, transform, selectedIds, w, h, penStrokes, currentStroke.current, themeColors)
     if (hasAnimating) {
       rafRef.current = requestAnimationFrame(render)
     }
-  }, [canvasRef, elements, transform, selectedIds, getCanvasSize, penStrokes])
+  }, [canvasRef, elements, transform, selectedIds, getCanvasSize, penStrokes, theme])
 
   const scheduleRender = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current)
@@ -84,16 +87,27 @@ export default function Canvas({
   const handleWheel = useCallback(
     (e) => {
       e.preventDefault()
-      const rect = containerRef.current.getBoundingClientRect()
-      const mx = e.clientX - rect.left
-      const my = e.clientY - rect.top
-      const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9
-      const newScale = Math.min(10, Math.max(0.1, transform.scale * zoomFactor))
-      onTransformChange({
-        x: mx - ((mx - transform.x) / transform.scale) * newScale,
-        y: my - ((my - transform.y) / transform.scale) * newScale,
-        scale: newScale,
-      })
+
+      if (e.ctrlKey || e.metaKey) {
+        // Pinch-to-zoom on trackpad (or ctrl+scroll)
+        const rect = containerRef.current.getBoundingClientRect()
+        const mx = e.clientX - rect.left
+        const my = e.clientY - rect.top
+        const zoomFactor = e.deltaY < 0 ? 1.05 : 0.95
+        const newScale = Math.min(10, Math.max(0.1, transform.scale * zoomFactor))
+        onTransformChange({
+          x: mx - ((mx - transform.x) / transform.scale) * newScale,
+          y: my - ((my - transform.y) / transform.scale) * newScale,
+          scale: newScale,
+        })
+      } else {
+        // Two-finger swipe / scroll wheel → pan
+        onTransformChange({
+          ...transform,
+          x: transform.x - e.deltaX,
+          y: transform.y - e.deltaY,
+        })
+      }
     },
     [transform, onTransformChange]
   )
@@ -307,7 +321,7 @@ export default function Canvas({
   return (
     <div
       ref={containerRef}
-      className={`relative flex-1 min-w-0 bg-[#111] ${cursor}`}
+      className={`relative flex-1 min-w-0 bg-[var(--canvas-bg)] ${cursor}`}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
@@ -317,7 +331,7 @@ export default function Canvas({
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          backgroundImage: "radial-gradient(circle, #222 0.5px, transparent 0.5px)",
+          backgroundImage: "radial-gradient(circle, var(--dot-grid) 0.5px, transparent 0.5px)",
           backgroundSize: "12px 12px",
           opacity: 0.4,
         }}
@@ -326,25 +340,32 @@ export default function Canvas({
 
       {selectionBox && selectionBox.w > 2 && (
         <div
-          className="absolute border border-[#5B9BF6]/50 bg-[#5B9BF6]/8 pointer-events-none"
-          style={{ left: selectionBox.x, top: selectionBox.y, width: selectionBox.w, height: selectionBox.h }}
+          className="absolute pointer-events-none"
+          style={{
+            left: selectionBox.x,
+            top: selectionBox.y,
+            width: selectionBox.w,
+            height: selectionBox.h,
+            border: "1px solid color-mix(in srgb, var(--interactive) 50%, transparent)",
+            background: "color-mix(in srgb, var(--interactive) 8%, transparent)",
+          }}
         />
       )}
 
       {selCount > 0 && (
-        <div className="absolute top-4 left-4 flex items-center gap-2 bg-[#111] border border-[#333] rounded px-2.5 py-1.5">
-          <span className="font-mono text-[10px] tracking-[0.08em] uppercase text-[#5B9BF6]">
+        <div className="absolute top-4 left-4 flex items-center gap-2 bg-[var(--bg-surface)] border border-[var(--border-visible)] rounded px-2.5 py-1.5">
+          <span className="font-mono text-[10px] tracking-[0.08em] uppercase text-[var(--interactive)]">
             {selCount} SELECTED
           </span>
         </div>
       )}
 
       {penStrokes.length > 0 && (
-        <div className="absolute top-4 left-4 flex items-center gap-2 bg-[#111] border border-[#D71921]/40 rounded px-2.5 py-1.5">
-          <span className="font-mono text-[10px] tracking-[0.08em] uppercase text-[#D71921]">
+        <div className="absolute top-4 left-4 flex items-center gap-2 bg-[var(--bg-surface)] rounded px-2.5 py-1.5" style={{ borderWidth: 1, borderStyle: "solid", borderColor: "color-mix(in srgb, var(--accent-red) 40%, transparent)" }}>
+          <span className="font-mono text-[10px] tracking-[0.08em] uppercase text-[var(--accent-red)]">
             {penStrokes.length} ANNOTATION{penStrokes.length > 1 ? "S" : ""}
           </span>
-          <span className="font-mono text-[10px] text-[#666]">send to ask about them</span>
+          <span className="font-mono text-[10px] text-[var(--text-tertiary)]">send to ask about them</span>
         </div>
       )}
 
@@ -354,8 +375,8 @@ export default function Canvas({
           onClick={() => onToolChange("select")}
           className={`p-2 border rounded transition-colors cursor-pointer ${
             activeTool === "select"
-              ? "bg-[#e8e8e8] border-[#e8e8e8] text-black"
-              : "bg-[#111] border-[#333] text-[#999] hover:text-[#e8e8e8] hover:border-[#666]"
+              ? "bg-[var(--active-bg)] border-[var(--active-bg)] text-[var(--active-text)]"
+              : "bg-[var(--bg-surface)] border-[var(--border-visible)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--text-tertiary)]"
           }`}
           title="Select (V)"
         >
@@ -365,8 +386,8 @@ export default function Canvas({
           onClick={() => onToolChange(activeTool === "pen" ? "select" : "pen")}
           className={`p-2 border rounded transition-colors cursor-pointer ${
             activeTool === "pen"
-              ? "bg-[#D71921] border-[#D71921] text-white"
-              : "bg-[#111] border-[#333] text-[#999] hover:text-[#e8e8e8] hover:border-[#666]"
+              ? "bg-[var(--accent-red)] border-[var(--accent-red)] text-white"
+              : "bg-[var(--bg-surface)] border-[var(--border-visible)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--text-tertiary)]"
           }`}
           title="Pen (P)"
         >
@@ -376,21 +397,21 @@ export default function Canvas({
 
       {/* Zoom controls */}
       <div className="absolute bottom-4 left-4 flex items-center gap-1">
-        <button onClick={zoomOut} className="p-1.5 bg-[#111] border border-[#333] rounded text-[#999] hover:text-[#e8e8e8] hover:border-[#666] transition-colors cursor-pointer">
+        <button onClick={zoomOut} className="p-1.5 bg-[var(--bg-surface)] border border-[var(--border-visible)] rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--text-tertiary)] transition-colors cursor-pointer">
           <ZoomOut size={14} strokeWidth={1.5} />
         </button>
-        <button onClick={resetView} className="px-2 py-1 bg-[#111] border border-[#333] rounded font-mono text-[10px] tracking-[0.06em] text-[#999] hover:text-[#e8e8e8] hover:border-[#666] transition-colors cursor-pointer">
+        <button onClick={resetView} className="px-2 py-1 bg-[var(--bg-surface)] border border-[var(--border-visible)] rounded font-mono text-[10px] tracking-[0.06em] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--text-tertiary)] transition-colors cursor-pointer">
           {Math.round(transform.scale * 100)}%
         </button>
-        <button onClick={zoomIn} className="p-1.5 bg-[#111] border border-[#333] rounded text-[#999] hover:text-[#e8e8e8] hover:border-[#666] transition-colors cursor-pointer">
+        <button onClick={zoomIn} className="p-1.5 bg-[var(--bg-surface)] border border-[var(--border-visible)] rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--text-tertiary)] transition-colors cursor-pointer">
           <ZoomIn size={14} strokeWidth={1.5} />
         </button>
-        <button onClick={resetView} className="p-1.5 bg-[#111] border border-[#333] rounded text-[#999] hover:text-[#e8e8e8] hover:border-[#666] transition-colors cursor-pointer ml-1">
+        <button onClick={resetView} className="p-1.5 bg-[var(--bg-surface)] border border-[var(--border-visible)] rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--text-tertiary)] transition-colors cursor-pointer ml-1">
           <Maximize size={14} strokeWidth={1.5} />
         </button>
       </div>
 
-      <div className="absolute bottom-4 right-4 font-mono text-[10px] tracking-[0.08em] uppercase text-[#444]">
+      <div className="absolute bottom-4 right-4 font-mono text-[10px] tracking-[0.08em] uppercase text-[var(--text-disabled)]">
         {elements.filter((e) => e.type !== "background").length} ELEMENTS
       </div>
     </div>
