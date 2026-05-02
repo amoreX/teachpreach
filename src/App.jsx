@@ -65,15 +65,20 @@ function App() {
   const updateConvo = useConvoStore((s) => s.updateConvo)
   const setConvoTitle = useConvoStore((s) => s.setTitle)
 
+  const initConvo = useConvoStore.getState().convos[activeId]
   const prevIdRef = useRef(activeId)
-  const elementsRef = useRef([])
-  const messagesRef = useRef([])
-  const chatHistoryRef = useRef([])
-  const transformRef = useRef({ x: 0, y: 0, scale: 1 })
+  const elementsRef = useRef(initConvo?.elements || [])
+  const messagesRef = useRef(initConvo?.messages || [])
+  const chatHistoryRef = useRef(initConvo?.chatHistory || [])
+  const transformRef = useRef(initConvo?.transform || { x: 0, y: 0, scale: 1 })
 
   function loadConvo(id) {
     const c = useConvoStore.getState().convos[id]
     if (!c) return
+    elementsRef.current = c.elements
+    messagesRef.current = c.messages
+    chatHistoryRef.current = c.chatHistory
+    transformRef.current = c.transform
     setElements(c.elements)
     setMessages(c.messages)
     setChatHistory(c.chatHistory)
@@ -95,10 +100,7 @@ function App() {
     })
   }
 
-  const [elements, _setElements] = useState(() => {
-    const c = useConvoStore.getState().convos[activeId]
-    return c ? c.elements : []
-  })
+  const [elements, _setElements] = useState(elementsRef.current)
   const setElements = useCallback((v) => {
     _setElements((prev) => {
       const next = typeof v === "function" ? v(prev) : v
@@ -107,10 +109,7 @@ function App() {
     })
   }, [])
 
-  const [messages, _setMessages] = useState(() => {
-    const c = useConvoStore.getState().convos[activeId]
-    return c ? c.messages : []
-  })
+  const [messages, _setMessages] = useState(messagesRef.current)
   const setMessages = useCallback((v) => {
     _setMessages((prev) => {
       const next = typeof v === "function" ? v(prev) : v
@@ -119,10 +118,7 @@ function App() {
     })
   }, [])
 
-  const [chatHistory, _setChatHistory] = useState(() => {
-    const c = useConvoStore.getState().convos[activeId]
-    return c ? c.chatHistory : []
-  })
+  const [chatHistory, _setChatHistory] = useState(chatHistoryRef.current)
   const setChatHistory = useCallback((v) => {
     _setChatHistory((prev) => {
       const next = typeof v === "function" ? v(prev) : v
@@ -131,10 +127,7 @@ function App() {
     })
   }, [])
 
-  const [transform, _setTransform] = useState(() => {
-    const c = useConvoStore.getState().convos[activeId]
-    return c ? c.transform : { x: 0, y: 0, scale: 1 }
-  })
+  const [transform, _setTransform] = useState(transformRef.current)
   const setTransform = useCallback((v) => {
     _setTransform((prev) => {
       const next = typeof v === "function" ? v(prev) : v
@@ -165,12 +158,14 @@ function App() {
     }
   }, [activeId])
 
-  // Periodically persist current convo (debounced on unmount / before unload)
+  // Persist on beforeunload, unmount, and periodically
   useEffect(() => {
     const onBeforeUnload = () => saveCurrentToStore()
     window.addEventListener("beforeunload", onBeforeUnload)
+    const interval = setInterval(() => saveCurrentToStore(), 3000)
     return () => {
       window.removeEventListener("beforeunload", onBeforeUnload)
+      clearInterval(interval)
       saveCurrentToStore()
     }
   }, [])
