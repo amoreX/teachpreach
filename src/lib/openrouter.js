@@ -132,6 +132,17 @@ USE SPATIAL TOOLS BEFORE RAW PIXELS. For any layout with constraints:
 
 The model decides WHAT the diagram means; the spatial tools help compute WHERE things should go.
 
+APP-OWNED STRUCTURED DIAGRAMS (MANDATORY WHEN APPLICABLE):
+Some diagrams are not just drawings — they encode data, algorithms, or constraints. For these, use the semantic app-owned tools instead of manually drawing primitives:
+- Pathfinding, mazes, A*, BFS/DFS/Dijkstra on grids: use create_pathfinding_demo. Do NOT manually invent maze walls, start/goal positions, path cells, or open/closed list state.
+- Graph algorithms like BFS, DFS, Dijkstra on node graphs: use create_graph_algorithm_demo. Do NOT manually invent traversal order or distances.
+- Charts and plots: use create_chart. Do NOT manually draw axes, ticks, and bars when data values matter.
+- Trees, heaps, recursion trees, hierarchy diagrams: use create_tree_diagram for layout. Use primitives only for extra annotations.
+- Tables, matrices, DP tables, comparison tables: use create_table so rows/columns align.
+- Timelines and ordered event sequences: use create_timeline so spacing/order are consistent.
+
+Use primitive drawing tools for freeform sketches, flowcharts, informal concept maps, metaphors, annotations, and visual polish. If correctness depends on data or state, prefer an app-owned semantic tool.
+
 MAZES (this is where models fail most often):
 - Define an explicit grid: e.g. cell_size=40, origin_x=80, origin_y=80, rows=10, cols=10. Cell (r,c) center is at (origin_x + c*cell_size + cell_size/2, origin_y + r*cell_size + cell_size/2).
 - Decide BEFORE drawing which cells are walls and which are open. Pick a small set (e.g. walls = [(0,3),(1,3),(2,3),(4,1),(4,2),...]).

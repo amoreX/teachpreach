@@ -20,6 +20,12 @@ const VISUAL_MUTATION_TOOLS = new Set([
   "clear_canvas",
   "set_background",
   "update_element",
+  "create_pathfinding_demo",
+  "create_graph_algorithm_demo",
+  "create_chart",
+  "create_tree_diagram",
+  "create_table",
+  "create_timeline",
 ])
 
 function describeElement(el) {
@@ -337,6 +343,10 @@ function App() {
         content: "[CANVAS SCREENSHOT CAPTURED] The rendered viewport has been attached as an image in the next message. Inspect it visually, identify concrete issues, then repair the canvas if needed before finalizing.",
         imageUrl,
       }
+    }
+    if (result.__batch) {
+      setElements((prev) => [...prev, ...(result.elements || [])])
+      return { id: null, content: result.content || `[OK] ${result.elements?.length || 0} elements created` }
     }
     if (result.__snapshot) {
       return { id: null, content: formatCanvasSnapshot(elementsRef.current) }

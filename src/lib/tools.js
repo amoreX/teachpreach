@@ -134,6 +134,149 @@ export const drawingTools = [
   {
     type: "function",
     function: {
+      name: "create_pathfinding_demo",
+      description: "Create a logically valid pathfinding diagram and trace from app-owned grid/algorithm state. Use this for A*, BFS, DFS, Dijkstra, maze solving, shortest path, or grid pathfinding demos instead of manually drawing maze walls and trace text.",
+      parameters: {
+        type: "object",
+        properties: {
+          algorithm: { type: "string", enum: ["astar", "bfs", "dfs", "dijkstra"], description: "Pathfinding algorithm to demonstrate on the grid." },
+          rows: { type: "number" },
+          cols: { type: "number" },
+          start: { type: "array", items: { type: "number" }, description: "[row, col]" },
+          goal: { type: "array", items: { type: "number" }, description: "[row, col]" },
+          walls: {
+            type: "array",
+            items: { type: "array", items: { type: "number" } },
+            description: "Optional wall cells as [row, col]. If invalid or disconnected, the app will generate a reachable grid.",
+          },
+          x: { type: "number" },
+          y: { type: "number" },
+          cellSize: { type: "number" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_graph_algorithm_demo",
+      description: "Create a graph algorithm diagram from app-owned graph state. Use for BFS, DFS, or Dijkstra demos instead of manually inventing traversal state.",
+      parameters: {
+        type: "object",
+        properties: {
+          algorithm: { type: "string", enum: ["bfs", "dfs", "dijkstra"] },
+          nodes: { type: "array", items: { type: "string" } },
+          edges: {
+            type: "array",
+            items: { type: "array" },
+            description: "Edges as [from, to, weight]. Weight is optional except for Dijkstra.",
+          },
+          start: { type: "string" },
+          x: { type: "number" },
+          y: { type: "number" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_chart",
+      description: "Create a chart with app-owned scales, axes, ticks, and data placement. Use for bar or line charts instead of drawing axes and bars manually.",
+      parameters: {
+        type: "object",
+        properties: {
+          chartType: { type: "string", enum: ["bar", "line"] },
+          title: { type: "string" },
+          data: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                label: { type: "string" },
+                value: { type: "number" },
+              },
+            },
+          },
+          x: { type: "number" },
+          y: { type: "number" },
+          width: { type: "number" },
+          height: { type: "number" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_tree_diagram",
+      description: "Create a tree diagram with app-owned parent/child layout. Use for binary trees, hierarchy diagrams, recursion trees, heaps, and parse trees.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          nodes: { type: "array", items: { type: "string" } },
+          edges: {
+            type: "array",
+            items: { type: "array" },
+            description: "Parent-child edges as [parent, child].",
+          },
+          root: { type: "string" },
+          x: { type: "number" },
+          y: { type: "number" },
+          width: { type: "number" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_table",
+      description: "Create a table with app-owned row/column sizing and aligned cell text. Use for matrices, DP tables, comparisons, and structured data.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          columns: { type: "array", items: { type: "string" } },
+          rows: { type: "array", items: { type: "array" } },
+          x: { type: "number" },
+          y: { type: "number" },
+          colWidth: { type: "number" },
+          rowHeight: { type: "number" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_timeline",
+      description: "Create a timeline with app-owned ordering and spacing. Use for sequences, histories, lifecycle flows, and step progressions.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          events: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                label: { type: "string" },
+                detail: { type: "string" },
+              },
+            },
+          },
+          x: { type: "number" },
+          y: { type: "number" },
+          width: { type: "number" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "define_grid",
       description: "Define a reusable grid coordinate system for precise layouts. Use this before drawing mazes, charts, tables, coordinate systems, or any diagram where elements must align.",
       parameters: {

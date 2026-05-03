@@ -7,6 +7,14 @@ import {
   summarizeGrid,
   verifyLayout,
 } from "./spatial-geometry"
+import {
+  createChart,
+  createGraphAlgorithmDemo,
+  createPathfindingDemo,
+  createTable,
+  createTimeline,
+  createTreeDiagram,
+} from "./structured-diagrams"
 
 export function executeToolCall(toolCall, context = {}) {
   const { name, arguments: args } = toolCall.function
@@ -65,6 +73,18 @@ export function executeToolCall(toolCall, context = {}) {
         closed: a.closed || false,
         fill: a.fill || null,
       })
+    case "create_pathfinding_demo":
+      return { __batch: true, ...createPathfindingDemo(a) }
+    case "create_graph_algorithm_demo":
+      return { __batch: true, ...createGraphAlgorithmDemo(a) }
+    case "create_chart":
+      return { __batch: true, ...createChart(a) }
+    case "create_tree_diagram":
+      return { __batch: true, ...createTreeDiagram(a) }
+    case "create_table":
+      return { __batch: true, ...createTable(a) }
+    case "create_timeline":
+      return { __batch: true, ...createTimeline(a) }
     case "define_grid":
       return { __spatial: true, content: summarizeGrid(a) }
     case "point_from_grid":
