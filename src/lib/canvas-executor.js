@@ -1,8 +1,17 @@
 import { createElement } from "./element-store"
+import {
+  formatPointFromGrid,
+  formatSnapToGrid,
+  getElementAnchor,
+  routePathAroundObstacles,
+  summarizeGrid,
+  verifyLayout,
+} from "./spatial-geometry"
 
-export function executeToolCall(toolCall) {
+export function executeToolCall(toolCall, context = {}) {
   const { name, arguments: args } = toolCall.function
   const a = args || {}
+  const elements = context.elements || []
 
   switch (name) {
     case "draw_rectangle":
@@ -56,6 +65,20 @@ export function executeToolCall(toolCall) {
         closed: a.closed || false,
         fill: a.fill || null,
       })
+    case "define_grid":
+      return { __spatial: true, content: summarizeGrid(a) }
+    case "point_from_grid":
+      return { __spatial: true, content: formatPointFromGrid(a) }
+    case "snap_to_grid":
+      return { __spatial: true, content: formatSnapToGrid(a) }
+    case "get_anchor_point":
+      return { __spatial: true, content: getElementAnchor(elements, a) }
+    case "route_path_around_obstacles":
+      return { __spatial: true, content: routePathAroundObstacles(elements, a) }
+    case "verify_layout":
+      return { __spatial: true, content: verifyLayout(elements) }
+    case "get_canvas_screenshot":
+      return { __screenshot: true }
     case "get_canvas_snapshot":
       return { __snapshot: true }
     case "update_element": {

@@ -19,6 +19,21 @@ function isConvoEmpty(c) {
   return c.messages.length === 0 && c.elements.length === 0
 }
 
+function stripPersistedImages(message) {
+  if (!Array.isArray(message.content)) return message
+
+  return {
+    ...message,
+    content: message.content.map((part) => {
+      if (part?.type !== "image_url") return part
+      return {
+        type: "text",
+        text: "[Screenshot omitted from saved chat history]",
+      }
+    }),
+  }
+}
+
 export const useConvoStore = create(
   persist(
     (set, get) => ({
@@ -107,7 +122,7 @@ export const useConvoStore = create(
               id: c.id,
               title: c.title,
               messages: c.messages,
-              chatHistory: c.chatHistory,
+              chatHistory: c.chatHistory.map(stripPersistedImages),
               elements: c.elements.map(({ createdAt, ...el }) => el),
               transform: c.transform,
               createdAt: c.createdAt,

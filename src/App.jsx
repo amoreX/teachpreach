@@ -1,13 +1,26 @@
 import { useState, useRef, useCallback, useEffect } from "react"
 import Canvas from "./components/Canvas"
 import ChatSidebar from "./components/ChatSidebar"
+import { renderCanvas } from "./lib/canvas-renderer"
 import { streamChat } from "./lib/openrouter"
 import { executeToolCall } from "./lib/canvas-executor"
 import { DEFAULT_MODEL, DEFAULT_EFFORT } from "./lib/models"
 import { getBounds } from "./lib/element-store"
+import { formatCanvasSnapshot } from "./lib/spatial-geometry"
 import { useConvoStore } from "./lib/store"
+import { getThemeColors } from "./lib/theme"
 
 const MAX_TOOL_ROUNDS = 50
+const VISUAL_MUTATION_TOOLS = new Set([
+  "draw_rectangle",
+  "draw_circle",
+  "draw_line",
+  "draw_text",
+  "draw_path",
+  "clear_canvas",
+  "set_background",
+  "update_element",
+])
 
 function describeElement(el) {
   switch (el.type) {
@@ -56,6 +69,43 @@ function findElementsInRegion(elements, bounds, padding = 20) {
     }
   }
   return hits
+}
+
+function captureCanvasScreenshot(canvas, options = {}) {
+  if (!canvas) return null
+  try {
+    const { elements, transform } = options
+    if (elements && transform) {
+      const rect = canvas.getBoundingClientRect()
+      const dpr = window.devicePixelRatio || 1
+      const w = rect.width || canvas.clientWidth || canvas.width / dpr || 800
+      const h = rect.height || canvas.clientHeight || canvas.height / dpr || 600
+      const offscreen = document.createElement("canvas")
+      offscreen.width = w * dpr
+      offscreen.height = h * dpr
+      const ctx = offscreen.getContext("2d")
+      const themeColors = getThemeColors()
+      const hasBackground = elements.some((el) => el.type === "background")
+      const captureElements = [
+        ...(hasBackground ? [] : [{ id: "capture-bg", type: "background", color: themeColors.canvasBg || "#111111", visible: true }]),
+        ...elements.map((el) => ({ ...el, createdAt: 0 })),
+      ]
+
+      renderCanvas(ctx, captureElements, transform, [], w, h, [], [], themeColors)
+      return offscreen.toDataURL("image/jpeg", 0.82)
+    }
+
+    return canvas.toDataURL("image/jpeg", 0.82)
+  } catch (e) {
+    console.warn("[screenshot] capture failed:", e.message)
+    return null
+  }
+}
+
+function waitForCanvasPaint() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve))
+  })
 }
 
 function App() {
@@ -269,24 +319,27 @@ function App() {
   }, [stopTimer])
 
   const applyToolCall = useCallback((tc) => {
-    const result = executeToolCall(tc)
+    const result = executeToolCall(tc, { elements: elementsRef.current })
     if (!result) return { id: null }
-    if (result.__snapshot) {
-      const current = elementsRef.current.filter((e) => e.type !== "background" && e.visible !== false)
-      const snapshot = current.map((el) => {
-        const b = getBounds(el)
-        return `id:${el.id} type:${el.type} bounds:(${Math.round(b.x)},${Math.round(b.y)},${Math.round(b.w)}x${Math.round(b.h)})${el.text ? ` text:"${el.text}"` : ""}${el.fill ? ` fill:${el.fill}` : ""}${el.color ? ` color:${el.color}` : ""}`
+    if (result.__spatial) {
+      return { id: null, content: result.content }
+    }
+    if (result.__screenshot) {
+      const imageUrl = captureCanvasScreenshot(canvasRef.current, {
+        elements: elementsRef.current,
+        transform: transformRef.current,
       })
-      const allBounds = current.map(getBounds)
-      let occupied = "empty canvas"
-      if (allBounds.length > 0) {
-        const minX = Math.min(...allBounds.map((b) => b.x))
-        const minY = Math.min(...allBounds.map((b) => b.y))
-        const maxX = Math.max(...allBounds.map((b) => b.x + b.w))
-        const maxY = Math.max(...allBounds.map((b) => b.y + b.h))
-        occupied = `occupied region: (${Math.round(minX)},${Math.round(minY)}) to (${Math.round(maxX)},${Math.round(maxY)}). Free space: right of x=${Math.round(maxX + 40)}, below y=${Math.round(maxY + 40)}`
+      if (!imageUrl) {
+        return { id: null, content: "[CANVAS SCREENSHOT ERROR] Could not capture the rendered viewport." }
       }
-      return { id: null, content: `[CANVAS SNAPSHOT] ${current.length} elements. ${occupied}\n${snapshot.join("\n")}` }
+      return {
+        id: null,
+        content: "[CANVAS SCREENSHOT CAPTURED] The rendered viewport has been attached as an image in the next message. Inspect it visually, identify concrete issues, then repair the canvas if needed before finalizing.",
+        imageUrl,
+      }
+    }
+    if (result.__snapshot) {
+      return { id: null, content: formatCanvasSnapshot(elementsRef.current) }
     }
     if (result.__clear) {
       setElements([])
@@ -398,8 +451,8 @@ function App() {
               })
             },
             onToolCall: (tc) => {
-              const { id: elementId, content } = applyToolCall(tc)
-              toolCalls.push({ ...tc, _elementId: elementId, _content: content })
+              const { id: elementId, content, imageUrl } = applyToolCall(tc)
+              toolCalls.push({ ...tc, _elementId: elementId, _content: content, _imageUrl: imageUrl })
             },
             onDone: () => {
               resolve({ assistantText, toolCalls })
@@ -425,6 +478,11 @@ function App() {
         }
 
         if (toolCalls.length > 0) {
+          const shouldAttachVisualFeedback = toolCalls.some((tc) =>
+            VISUAL_MUTATION_TOOLS.has(tc.function.name)
+          )
+          if (shouldAttachVisualFeedback) await waitForCanvasPaint()
+
           const assistantMsg = {
             role: "assistant",
             content: assistantText,
@@ -473,7 +531,46 @@ function App() {
                 : `[OK] ${tc.function.name} executed`,
           }))
 
-          runningHistory = [...runningHistory, assistantHistoryMsg, ...toolResults]
+          const autoScreenshotUrl = shouldAttachVisualFeedback
+            ? captureCanvasScreenshot(canvasRef.current, {
+              elements: elementsRef.current,
+              transform: transformRef.current,
+            })
+            : null
+
+          const screenshotMessages = toolCalls
+            .filter((tc) => tc._imageUrl)
+            .map((tc) => ({
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: "Visual QA screenshot of the current canvas viewport. Inspect the rendered diagram as an image. Look for clutter, unreadable text, misleading spatial relationships, overlaps, labels hidden by shapes, paths through obstacles, and poor visual hierarchy. If you find issues, use tools to repair them; if it looks good, continue.",
+                },
+                {
+                  type: "image_url",
+                  image_url: { url: tc._imageUrl },
+                },
+              ],
+            }))
+
+          if (autoScreenshotUrl) {
+            screenshotMessages.push({
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: "Automatic visual feedback after the latest canvas changes. Inspect the rendered viewport before making the next drawing move. If the maze, path, labels, trace, or layout is visually wrong, repair it now. Pay special attention to whether start/goal cells are reachable, paths are blocked by walls, labels are readable, and the diagram actually matches the algorithm state.",
+                },
+                {
+                  type: "image_url",
+                  image_url: { url: autoScreenshotUrl },
+                },
+              ],
+            })
+          }
+
+          runningHistory = [...runningHistory, assistantHistoryMsg, ...toolResults, ...screenshotMessages]
           setChatHistory(runningHistory)
 
           console.log(`[agent] round ${round} done, ${toolCalls.length} tools called, looping...`)

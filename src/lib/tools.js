@@ -134,6 +134,153 @@ export const drawingTools = [
   {
     type: "function",
     function: {
+      name: "define_grid",
+      description: "Define a reusable grid coordinate system for precise layouts. Use this before drawing mazes, charts, tables, coordinate systems, or any diagram where elements must align.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Short name for the grid" },
+          originX: { type: "number", description: "Grid origin X, top-left corner" },
+          originY: { type: "number", description: "Grid origin Y, top-left corner" },
+          rows: { type: "number", description: "Number of rows" },
+          cols: { type: "number", description: "Number of columns" },
+          cellSize: { type: "number", description: "Uniform cell size in pixels" },
+          cellWidth: { type: "number", description: "Cell width in pixels if cells are not square" },
+          cellHeight: { type: "number", description: "Cell height in pixels if cells are not square" },
+        },
+        required: ["originX", "originY", "rows", "cols"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "point_from_grid",
+      description: "Convert a grid row/column into an exact canvas coordinate. Use the returned point for labels, nodes, walls, data points, and path waypoints.",
+      parameters: {
+        type: "object",
+        properties: {
+          originX: { type: "number" },
+          originY: { type: "number" },
+          row: { type: "number" },
+          col: { type: "number" },
+          cellSize: { type: "number" },
+          cellWidth: { type: "number" },
+          cellHeight: { type: "number" },
+          anchor: {
+            type: "string",
+            enum: ["center", "topLeft", "topRight", "bottomLeft", "bottomRight"],
+            description: "Which point inside the cell to return. Default: center.",
+          },
+        },
+        required: ["originX", "originY", "row", "col"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "snap_to_grid",
+      description: "Snap an arbitrary point to the nearest grid center or corner. Use this to repair approximate coordinates before drawing.",
+      parameters: {
+        type: "object",
+        properties: {
+          x: { type: "number" },
+          y: { type: "number" },
+          originX: { type: "number" },
+          originY: { type: "number" },
+          cellSize: { type: "number" },
+          cellWidth: { type: "number" },
+          cellHeight: { type: "number" },
+          mode: { type: "string", enum: ["center", "corner"], description: "Snap target. Default: center." },
+        },
+        required: ["x", "y", "originX", "originY"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_anchor_point",
+      description: "Get an exact anchor point from an existing element, such as its center, top, bottom, left, or right. Use this to connect lines and align annotations precisely.",
+      parameters: {
+        type: "object",
+        properties: {
+          elementId: { type: "number", description: "Existing element ID" },
+          anchor: {
+            type: "string",
+            enum: ["center", "top", "bottom", "left", "right", "topLeft", "topRight", "bottomLeft", "bottomRight"],
+          },
+        },
+        required: ["elementId"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "route_path_around_obstacles",
+      description: "Calculate a collision-aware polyline between two points. Use this before drawing paths, flowchart connectors, annotation arrows, or graph edges that must avoid existing elements.",
+      parameters: {
+        type: "object",
+        properties: {
+          start: {
+            type: "object",
+            properties: {
+              x: { type: "number" },
+              y: { type: "number" },
+            },
+            required: ["x", "y"],
+          },
+          end: {
+            type: "object",
+            properties: {
+              x: { type: "number" },
+              y: { type: "number" },
+            },
+            required: ["x", "y"],
+          },
+          obstacleIds: {
+            type: "array",
+            items: { type: "number" },
+            description: "Optional list of element IDs to avoid. If omitted, the router avoids visible rectangles, circles, and text.",
+          },
+          ignoreIds: {
+            type: "array",
+            items: { type: "number" },
+            description: "Optional element IDs to ignore while routing.",
+          },
+          padding: { type: "number", description: "Extra space around obstacles. Default: 16." },
+        },
+        required: ["start", "end"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "verify_layout",
+      description: "Check the current canvas for overlaps and path-obstacle intersections. Call this after constrained drawings and repair any warnings before final explanation.",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_canvas_screenshot",
+      description: "Capture the rendered visible canvas viewport for visual QA. Use this after complex diagrams to inspect the actual image for clutter, unreadable text, bad hierarchy, overlaps, or spatial mistakes that structured geometry may miss.",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "get_canvas_snapshot",
       description: "Get a snapshot of all elements currently on the canvas with their positions and bounds. Call this before adding content near existing drawings to avoid overlaps, or to find free space for new content.",
       parameters: {
