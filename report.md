@@ -1,194 +1,229 @@
-# Spatial Reasoning Implementation Report
+# App-Owned Diagram Engines Report
 
 ## Summary
 
-Implemented a general spatial reasoning layer for the drawing agent. The goal was to improve the agent's ability to create accurate diagrams across many diagram types without adding one-off tools for every possible user request.
+The drawing system has been revamped so correctness-sensitive diagrams no longer depend on the model manually inventing coordinates, algorithm state, scales, or layouts.
 
-Instead of only relying on prompt engineering, the app now gives the model reusable spatial helpers for grids, snapping, anchors, routing, and layout verification. These tools help the model compute exact geometry before drawing with primitive canvas tools.
+The app now owns deterministic rendering for these structured domains:
 
-## What Changed
+- Grid pathfinding: A*, BFS, DFS, Dijkstra-style traversal.
+- Graph algorithms: BFS, DFS, Dijkstra.
+- Charts: bar and line charts with app-owned axes, ticks, and value placement.
+- Trees: parent/child layout.
+- Tables: row/column sizing and aligned cell text.
+- Timelines: ordered event spacing.
 
-### 1. Added General Spatial Geometry Helpers
+Primitive drawing tools still remain for freeform sketches, conceptual flowcharts, annotations, and visual polish.
 
-Created `src/lib/spatial-geometry.js`.
+## Why This Was Needed
 
-This module provides reusable spatial operations:
+The previous system improved spatial awareness with grids, snapshots, collision checks, and screenshot QA, but the model was still allowed to draw a maze or algorithm trace by hand. That caused fundamental correctness failures:
 
-- Grid coordinate conversion.
-- Point snapping to grid centers or corners.
-- Element anchor extraction.
-- Collision and overlap detection.
-- Path-obstacle intersection checks.
-- Simple obstacle-aware orthogonal route suggestions.
-- Rich canvas snapshot formatting.
-- Layout verification summaries.
+- Start nodes placed in unreachable pockets.
+- Goals disconnected from the start.
+- A* open/closed list state invented instead of computed.
+- Paths and explored cells that did not match the maze.
+- Charts and structured layouts relying on guessed pixels.
 
-Why this was added:
+Screenshots help the model notice visual problems, but screenshots do not generate valid algorithm state. The source of truth has to live in app code for diagrams where correctness matters.
 
-The agent was previously expected to manually calculate pixel positions in text. That is fragile. Moving reusable geometry logic into app code gives the model deterministic helpers it can call before drawing.
+## What Was Implemented
 
-How it improves the app:
+### 1. Deterministic Structured Diagram Module
 
-- Maze paths, chart points, graph connectors, labels, and annotations can be based on exact coordinates.
-- The model can get precise warnings when elements overlap or paths intersect filled obstacles.
-- The same helpers work across many diagram types instead of only solving mazes.
+Added `src/lib/structured-diagrams.js`.
 
-### 2. Added New Spatial Tools
+This module creates complete batches of canvas elements from app-owned data and algorithms. It includes:
 
-Extended `src/lib/tools.js` with these general-purpose tools:
+- `createPathfindingDemo`
+- `createGraphAlgorithmDemo`
+- `createChart`
+- `createTreeDiagram`
+- `createTable`
+- `createTimeline`
 
-- `define_grid`
-- `point_from_grid`
-- `snap_to_grid`
-- `get_anchor_point`
-- `route_path_around_obstacles`
-- `verify_layout`
-- `get_canvas_screenshot`
+Each function returns:
 
-Why this was added:
+- Canvas elements to render.
+- A structured text summary for the model.
 
-The previous tool set only exposed low-level primitives like rectangles, circles, lines, text, and paths. Those are flexible, but they force the model to invent geometry directly. The new tools let the model ask the app for spatial calculations while still drawing with the existing primitives.
+### 2. Pathfinding Engine
 
-How it improves the app:
+Pathfinding demos now generate and validate real grid state.
 
-- The agent can define a grid before drawing grid-based diagrams.
-- The agent can convert row/column positions into exact canvas coordinates.
-- The agent can connect to exact element anchors instead of approximate centers.
-- The agent can ask for routed paths around existing obstacles.
-- The agent can verify the canvas before giving the final answer.
-- The agent can request a rendered screenshot for vision-based QA.
+Implemented behavior:
 
-### 3. Wired Spatial Tools Into Tool Execution
+- Normalizes start, goal, wall cells, rows, columns, and cell size.
+- Rejects walls that cover start or goal.
+- Checks reachability.
+- If the provided wall layout is disconnected, replaces it with a reachable generated layout.
+- Runs the selected algorithm:
+  - `astar`
+  - `bfs`
+  - `dfs`
+  - `dijkstra`
+- Produces real trace state: current cell, open/frontier cells, closed cells, and final path.
+- Renders walls, start, goal, explored cells, final path, and trace panel from engine output.
+
+Impact:
+
+The model can no longer create a boxed-in start or fake an A* trace when it uses the semantic tool. Invalid pathfinding specs are repaired before anything reaches the canvas.
+
+### 3. Graph Algorithm Engine
+
+Graph algorithm demos now use app-owned graph state.
+
+Implemented behavior:
+
+- Accepts nodes, edges, weights, start node, and algorithm.
+- Provides default graph data if the model does not specify one.
+- Runs:
+  - BFS traversal order.
+  - DFS traversal order.
+  - Dijkstra distances.
+- Renders nodes, edges, weights, traversal state, and result panel deterministically.
+
+Impact:
+
+The model no longer needs to invent traversal order or shortest-path distances for graph demos.
+
+### 4. Chart Renderer
+
+Charts now use app-owned scales.
+
+Implemented behavior:
+
+- Supports bar charts and line charts.
+- Computes max value.
+- Draws axes, tick marks, grid lines, bars/points, labels, and values from data.
+
+Impact:
+
+Bars and points now correspond to actual values instead of approximate hand-drawn heights.
+
+### 5. Tree Renderer
+
+Trees now use app-owned parent/child layout.
+
+Implemented behavior:
+
+- Accepts nodes, root, and parent-child edges.
+- Computes levels breadth-first.
+- Places nodes by level with consistent spacing.
+- Draws parent-child connectors and labels.
+
+Impact:
+
+Tree structure is no longer dependent on guessed node placement.
+
+### 6. Table Renderer
+
+Tables now use app-owned row and column sizing.
+
+Implemented behavior:
+
+- Accepts columns and rows.
+- Computes consistent cell positions.
+- Centers header and cell text.
+- Supports configurable column width and row height.
+
+Impact:
+
+Tables, matrices, DP tables, and comparison grids are aligned by code rather than by the model eyeballing rectangles.
+
+### 7. Timeline Renderer
+
+Timelines now use app-owned event ordering and spacing.
+
+Implemented behavior:
+
+- Accepts ordered events.
+- Spaces events evenly on a horizontal axis.
+- Renders labels and optional details.
+
+Impact:
+
+Sequence diagrams and timeline explanations get stable ordering and spacing.
+
+### 8. Semantic Tools
+
+Extended `src/lib/tools.js` with app-owned structured tools:
+
+- `create_pathfinding_demo`
+- `create_graph_algorithm_demo`
+- `create_chart`
+- `create_tree_diagram`
+- `create_table`
+- `create_timeline`
+
+Existing low-level tools remain available:
+
+- `draw_rectangle`
+- `draw_circle`
+- `draw_line`
+- `draw_text`
+- `draw_path`
+- spatial helpers
+- screenshot QA
+
+### 9. Tool Execution Support
 
 Updated `src/lib/canvas-executor.js`.
 
-The executor now handles spatial tool calls that return structured text feedback instead of drawing new elements. Drawing tools still create canvas elements as before.
+The executor now supports semantic tools that return a batch of canvas elements instead of one element.
 
-Why this was added:
+Updated `src/App.jsx`.
 
-Some tools should not draw directly. A tool like `snap_to_grid` or `verify_layout` is more useful when it returns precise coordinates or warnings that the model can use in its next drawing step.
+The app now handles `__batch` tool results by appending all returned elements to the canvas and returning a structured summary to the model.
 
-How it improves the app:
-
-- Spatial reasoning can happen inside the existing multi-round tool loop.
-- The model can call a helper, read the result, then draw more accurately in the next round.
-- The existing drawing model remains flexible and backward-compatible.
-
-### 4. Improved Canvas Snapshots
-
-Updated `src/App.jsx` to use the new `formatCanvasSnapshot` helper.
-
-Canvas snapshots now include:
-
-- Element bounds.
-- Element centers.
-- Existing text/fill/color metadata.
-- Occupied canvas region.
-- Free-space suggestions.
-- Layout warnings.
-
-Why this was added:
-
-The old snapshot only listed basic bounds. It helped avoid large overlaps, but it did not tell the model whether a path intersected an obstacle or whether elements were already colliding.
-
-How it improves the app:
-
-- The model receives better spatial context before adding or repairing content.
-- Layout problems are visible to the model as structured warnings.
-- The same snapshot tool is now useful for both free-space planning and quality control.
-
-### 5. Updated the System Prompt
+### 10. Prompt Routing
 
 Updated `src/lib/openrouter.js`.
 
-The prompt now instructs the agent to:
+The system prompt now tells the model:
 
-- Use spatial tools before raw pixel drawing.
-- Define grids for constrained layouts.
-- Use grid point conversion and snapping for exact coordinates.
-- Use anchors for connectors and labels.
-- Route paths around obstacles.
-- Run `verify_layout` after constrained drawings.
-- Run `get_canvas_screenshot` for complex or visually dense drawings.
-- Repair warnings before final explanation.
+- Use `create_pathfinding_demo` for pathfinding, mazes, A*, BFS, DFS, and Dijkstra on grids.
+- Use `create_graph_algorithm_demo` for graph BFS, DFS, and Dijkstra.
+- Use `create_chart` for charts and plots.
+- Use `create_tree_diagram` for trees and hierarchies.
+- Use `create_table` for tables, matrices, and DP tables.
+- Use `create_timeline` for timelines and ordered sequences.
+- Use primitive tools for freeform sketches, annotations, flowcharts, and concept visuals.
 
-Why this was added:
-
-Tools only help if the agent knows when to use them. The prompt now turns the tools into an expected workflow instead of optional utilities.
-
-How it improves the app:
-
-- The agent is guided toward a plan-then-draw loop.
-- Spatial checks become part of diagram creation.
-- Rendered visual QA becomes part of complex diagram creation.
-- The model is less likely to finish with known geometry mistakes.
-
-### 6. Added Multimodal Visual QA Loop
-
-Updated `src/App.jsx`, `src/lib/canvas-executor.js`, and `src/lib/store.js`.
-
-The app now supports a `get_canvas_screenshot` tool. When the model calls it:
-
-1. The app renders the current element store into an offscreen canvas and captures it with `toDataURL("image/jpeg")`.
-2. The tool call is satisfied with a text result, keeping the tool-call protocol valid.
-3. The screenshot is appended to the next model round as a user image message.
-4. The model can inspect the actual rendered diagram and repair visual issues with more tool calls.
-
-The app also sends automatic screenshot feedback after drawing/update rounds. This means the model no longer has to remember to call the screenshot tool manually after each iteration. If it draws a maze step, updates a path, or adds labels, the next model round includes the rendered viewport as visual context.
-
-Why this was added:
-
-Structured geometry catches exact intersections and overlaps, but it cannot judge all perceptual problems. The screenshot example showed issues such as cluttered labels, visual ambiguity, awkward hierarchy, and a diagram that still did not read cleanly even after grid-aware tooling.
-
-How it improves the app:
-
-- Haiku 4.5 and Sonnet 4.5 can inspect the rendered canvas as vision models.
-- The agent can catch what structured metadata misses.
-- Complex diagrams can go through a critique-and-repair loop before the final explanation.
-- The model sees the same visual output the user sees, not just element coordinates.
-- The agent gets visual feedback after every drawing round, reducing the chance that it continues building on a bad intermediate diagram.
-- Screenshot images are stripped from persisted chat history so localStorage does not fill up with base64 image data.
-
-## Design Decision
-
-I did not implement a special `draw_maze` tool.
-
-That would solve the screenshot example, but it would not solve the broader problem. Users can ask for many constrained visuals: graphs, charts, grids, timelines, circuits, tables, geometry diagrams, and more. A one-off tool for each would not scale.
-
-The implemented approach gives the agent general spatial primitives:
+## Architecture
 
 ```text
-Define coordinate system
-Compute exact points
-Snap approximate points
-Use anchors
-Route around obstacles
-Verify layout
-Repair warnings
-Draw with primitives
+User request
+-> Model chooses intent and semantic tool
+-> App validates data / runs algorithm / computes layout
+-> App returns deterministic canvas elements
+-> Screenshot QA checks visual output
+-> Model explains or annotates
 ```
 
-This keeps the drawing system flexible while making it more spatially reliable.
+This separates responsibilities:
 
-## Screenshot / Vision QA Notes
+```text
+Model owns:
+- Intent
+- Teaching language
+- High-level composition
+- Optional annotations
 
-The multimodal loop is now implemented as a secondary review pass on top of deterministic geometry.
-
-The screenshot is not returned directly as a tool message. Instead, the app first returns a normal text tool result, then appends the screenshot as a separate image-bearing user message for the next round. This keeps the tool-call protocol valid while still giving vision-capable models access to the rendered viewport.
-
-The image message exists in the live chat history for the current model loop. When conversations are persisted, the image payload is replaced with a short text placeholder to avoid storing large data URLs.
-
-For drawing rounds, screenshots are attached automatically. The screenshot renderer uses the current element state rather than trusting the live DOM canvas, so the model should receive the latest diagram even if the visible canvas has not finished repainting yet. Manual `get_canvas_screenshot` remains available for explicit visual QA checkpoints.
-
-This is useful because:
-
-- Geometry checks are deterministic and catch exact failures.
-- Screenshot QA catches perceptual failures.
-- The two systems complement each other instead of competing.
+App owns:
+- Algorithm state
+- Coordinates
+- Layout constraints
+- Scales and ticks
+- Parent/child placement
+- Row/column alignment
+```
 
 ## Verification
 
-Ran the production build:
+### Production Build
+
+Ran:
 
 ```text
 npm run build
@@ -200,35 +235,94 @@ Result:
 ✓ built successfully
 ```
 
-Also attempted a direct Node sanity check for the geometry helpers. That check failed because Node could not resolve the app's Vite-style extensionless import from `spatial-geometry.js` to `element-store`. The production Vite build resolved the imports correctly, so this is not an app build failure.
+### Runtime Engine Checks
 
-After adding screenshot QA, ran the production build again:
+Loaded the source modules through Vite SSR and exercised every semantic renderer.
+
+Checked:
+
+- A* pathfinding.
+- BFS grid pathfinding.
+- DFS grid pathfinding.
+- Dijkstra grid pathfinding.
+- Graph BFS.
+- Graph DFS.
+- Graph Dijkstra.
+- Bar chart.
+- Line chart.
+- Tree diagram.
+- Table.
+- Timeline.
+
+The pathfinding check intentionally passed an invalid wall layout that boxed in the start. The engine repaired it and reported a reachable grid for all four grid algorithms.
+
+Observed runtime output:
 
 ```text
-npm run build
+astar: reachable
+bfs: reachable
+dfs: reachable
+dijkstra: reachable
+pathfinding: elements produced
+graph-bfs: elements produced
+graph-dfs: elements produced
+graph-dijkstra: elements produced
+bar-chart: elements produced
+line-chart: elements produced
+tree: elements produced
+table: elements produced
+timeline: elements produced
 ```
 
-Result:
+## Current Behavior
 
-```text
-✓ built successfully
-```
+Structured/correctness-sensitive diagrams now have app-owned paths:
 
-## Expected Impact
+- Pathfinding requests should use deterministic grid rendering.
+- Graph algorithm requests should use deterministic graph state.
+- Chart requests should use deterministic scales and axes.
+- Tree requests should use deterministic parent-child layout.
+- Table requests should use deterministic cell layout.
+- Timeline requests should use deterministic event spacing.
 
-This should make the agent better at diagrams where spatial correctness matters:
+Freeform diagrams still use normal drawing tools:
 
-- Maze and pathfinding diagrams should use grid centers and verify path-obstacle intersections.
-- Flowchart connectors can be routed around boxes.
-- Graph edges can use exact node anchors.
-- Charts can place values from coordinate systems instead of visual guessing.
-- Labels and annotations can be checked for overlap.
-- The agent can repair mistakes using structured warnings.
-- The agent can inspect a screenshot and repair perceptual visual issues before finalizing.
+- Flowcharts.
+- Concept sketches.
+- Visual metaphors.
+- Informal process diagrams.
+- Extra annotations on top of semantic diagrams.
 
-The biggest improvement is that the app now helps the model reason spatially instead of relying only on model-side mental math.
+## Limitations
 
-## Remaining Follow-Up
+This is a strong first app-owned layer, but not a full design system for every possible diagram.
 
-The screenshot QA loop captures the visible viewport. A later enhancement could add full-diagram screenshot framing by temporarily fitting all elements into view before capture, or by rendering an offscreen canvas that contains the complete occupied region.
+Current limitations:
+
+- Pathfinding grids are rendered as compact demos, not a fully interactive step player.
+- Graph layout uses a simple circular layout.
+- Tree layout uses level-based spacing.
+- Charts support bar and line charts only.
+- Timeline layout is horizontal only.
+- Geometry diagrams with theorem-level constraints are not yet a dedicated engine.
+
+## Next Improvements
+
+Recommended next steps:
+
+- Add explicit `create_geometry_diagram` for angles, triangles, measurements, intersections, and proofs.
+- Add graph layout options such as layered, force-like, or manual positions.
+- Add chart variants like scatter, stacked bar, and area.
+- Add step-by-step rendering controls for pathfinding and graph algorithms.
+- Add semantic repair commands so the model can ask for “simpler maze,” “more spacing,” or “larger labels” without redrawing from primitives.
+
+## Bottom Line
+
+The app now has a real hybrid architecture:
+
+- Deterministic engines for diagrams where correctness matters.
+- Primitive tools for flexible visual teaching.
+- Screenshot QA for perceptual review.
+
+This should prevent the kind of invalid maze and fake A* trace failures that were happening before, as long as the model follows the semantic tool routing in the prompt.
 
